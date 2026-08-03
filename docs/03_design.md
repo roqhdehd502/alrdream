@@ -229,20 +229,20 @@ PG사는 **토스페이먼츠(신모듈)**, 결제 게이트웨이는 **포트�
 
 버전 관리·설문 불변성 요구사항([01] 5,6,8,9,11 / [02] §7)을 그대로 테이블로 옮긴다. DB는 Supabase가 관리하는 PostgreSQL을 사용하되, 접근은 기존 계획대로 Spring Data JPA + Querydsl + Flyway로 한다 (Supabase 자체 클라이언트/Auth는 사용하지 않음). 실제 마이그레이션은 `database/migarations/`에 Flyway로 작성한다.
 
-| 테이블 | 주요 컬럼 | 비고 |
-| --- | --- | --- |
-| `users` | id, email, password_hash, provider, provider_id, role, plan, created_at | `provider=LOCAL\|GOOGLE\|APPLE\|...`, `role=USER\|ADMIN` |
-| `workspaces` | id, user_id(FK), name, status, deleted_at, created_at | 소프트 삭제 |
-| `survey_definitions` | id, survey_key, version, title, schema(jsonb) | `unique(survey_key, version)`, Admin에서 발행 |
-| `survey_responses` | id, survey_definition_id(FK), workspace_id(FK), answers(jsonb, 암호화), submitted_at | **불변** |
-| `planning_versions` | id, workspace_id(FK), survey_response_id(FK), version_no, content(jsonb, 암호화), status, deleted_at | status: GENERATING/COMPLETED/FAILED, 소프트 삭제 |
-| `analysis_versions` | id, planning_version_id(FK), version_no, content(jsonb, 암호화), status, deleted_at | survey_response 없음, 소프트 삭제 |
-| `design_versions` | id, analysis_version_id(FK), survey_response_id(FK), version_no, content(jsonb, 암호화), status, deleted_at | 소프트 삭제 |
-| `documents` | id, source_type(PLANNING/ANALYSIS/DESIGN), source_id, file_url, generated_at | PDF 산출물 (Supabase Storage 경로) |
-| `ai_generation_jobs` | id, target_type, target_id, status, error_message, created_at | 폴링용 |
-| `subscriptions` | id, user_id(FK), plan, status, billing_key(암호화), next_billing_at, started_at, expires_at | `status=ACTIVE\|PAST_DUE\|CANCELED`, [01] 13번 BM |
-| `payment_history` | id, subscription_id(FK), payment_id, amount, status, paid_at, created_at | `payment_id` unique — 웹훅 멱등 처리 키 |
-| `usage_quotas` | id, user_id(FK), period(YYYY-MM), generation_count, limit_count | Free 티어 생성 횟수 제한 |
+| 테이블               | 주요 컬럼                                                                                                   | 비고                                                     |
+| -------------------- | ----------------------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
+| `users`              | id, email, password_hash, provider, provider_id, role, plan, created_at                                     | `provider=LOCAL\|GOOGLE\|APPLE\|...`, `role=USER\|ADMIN` |
+| `workspaces`         | id, user_id(FK), name, status, deleted_at, created_at                                                       | 소프트 삭제                                              |
+| `survey_definitions` | id, survey_key, version, title, schema(jsonb)                                                               | `unique(survey_key, version)`, Admin에서 발행            |
+| `survey_responses`   | id, survey_definition_id(FK), workspace_id(FK), answers(jsonb, 암호화), submitted_at                        | **불변**                                                 |
+| `planning_versions`  | id, workspace_id(FK), survey_response_id(FK), version_no, content(jsonb, 암호화), status, deleted_at        | status: GENERATING/COMPLETED/FAILED, 소프트 삭제         |
+| `analysis_versions`  | id, planning_version_id(FK), version_no, content(jsonb, 암호화), status, deleted_at                         | survey_response 없음, 소프트 삭제                        |
+| `design_versions`    | id, analysis_version_id(FK), survey_response_id(FK), version_no, content(jsonb, 암호화), status, deleted_at | 소프트 삭제                                              |
+| `documents`          | id, source_type(PLANNING/ANALYSIS/DESIGN), source_id, file_url, generated_at                                | PDF 산출물 (Supabase Storage 경로)                       |
+| `ai_generation_jobs` | id, target_type, target_id, status, error_message, created_at                                               | 폴링용                                                   |
+| `subscriptions`      | id, user_id(FK), plan, status, billing_key(암호화), next_billing_at, started_at, expires_at                 | `status=ACTIVE\|PAST_DUE\|CANCELED`, [01] 13번 BM        |
+| `payment_history`    | id, subscription_id(FK), payment_id, amount, status, paid_at, created_at                                    | `payment_id` unique — 웹훅 멱등 처리 키                  |
+| `usage_quotas`       | id, user_id(FK), period(YYYY-MM), generation_count, limit_count                                             | Free 티어 생성 횟수 제한                                 |
 
 **삭제 정책**: `workspaces`/`*_versions`는 `deleted_at` 기반 소프트 삭제를 기본으로 한다 ([01] 6, 9번의 다중 선택 삭제는 소프트 삭제로 처리, 목록/조회 API에서 필터링). 사용자가 완전 삭제(예: 회원 탈퇴에 따른 개인정보 삭제)를 요청하는 경우에 한해 하드 삭제 API를 별도로 제공한다. 상위 버전(기획)이 소프트 삭제되어도 이를 참조하는 하위 버전(분석/설계)은 조회만 가능하고 재생성은 막는다.
 
@@ -252,14 +252,14 @@ PG사는 **토스페이먼츠(신모듈)**, 결제 게이트웨이는 **포트�
 
 # 6. 배포 아키텍처
 
-개인 토이 프로젝트 규모이므로 전 구간 무료 티어로 구성한다.
+전 구간 무료 티어로 구성한다.
 
-| 대상 | 플랫폼 | 비고 |
-| --- | --- | --- |
-| Admin | **Vercel** | Vite 정적 빌드 배포, 무료 티어 |
-| Backend | **Koyeb** | Docker 컨테이너 배포, 무료 Nano 인스턴스(0.1 vCPU/512MB) |
-| Frontend | **EAS Build (내부/테스트 배포)** | 스토어 정식 출시 아님 — Android는 APK 내부 배포, iOS는 Ad-hoc/TestFlight 수준으로 한정 |
-| Database/Storage | Supabase | §1/§5에서 이미 확정 |
+| 대상             | 플랫폼                           | 비고                                                                                   |
+| ---------------- | -------------------------------- | -------------------------------------------------------------------------------------- |
+| Admin            | **Vercel**                       | Vite 정적 빌드 배포, 무료 티어                                                         |
+| Backend          | **Koyeb**                        | Docker 컨테이너 배포, 무료 Nano 인스턴스(0.1 vCPU/512MB)                               |
+| Frontend         | **EAS Build (내부/테스트 배포)** | 스토어 정식 출시 아님 — Android는 APK 내부 배포, iOS는 Ad-hoc/TestFlight 수준으로 한정 |
+| Database/Storage | Supabase                         | §1/§5에서 이미 확정                                                                    |
 
 **Koyeb 무료 티어 고려사항**
 

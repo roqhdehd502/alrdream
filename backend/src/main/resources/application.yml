@@ -1,0 +1,62 @@
+spring:
+  config:
+    import: "optional:file:.env[.properties]"
+
+  application:
+    name: backend
+
+  datasource:
+    url: ${SUPABASE_DB_URL}
+    username: ${SUPABASE_DB_USERNAME}
+    password: ${SUPABASE_DB_PASSWORD}
+
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+
+  flyway:
+    # 로컬/`./gradlew bootRun` 기준 상대 경로 (working dir = backend/).
+    # Docker 이미지에서는 database/migarations를 이미지에 복사해 경로를 재조정한다 (Phase 01).
+    locations: filesystem:../database/migarations
+
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+
+server:
+  port: ${PORT:8080}
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+
+# 아래 값들은 Phase 03(인증) / 06(AI 연동) / 09(PDF/Storage) / 11(결제)에서 실제 코드와 연동된다.
+# 지금은 [03] 설계 문서에 맞춰 설정 슬롯만 정의해둔다.
+app:
+  jwt:
+    secret: ${JWT_SECRET:}
+  oauth:
+    google:
+      client-id: ${GOOGLE_OAUTH_CLIENT_ID:}
+      client-secret: ${GOOGLE_OAUTH_CLIENT_SECRET:}
+    apple:
+      client-id: ${APPLE_OAUTH_CLIENT_ID:}
+      team-id: ${APPLE_OAUTH_TEAM_ID:}
+      key-id: ${APPLE_OAUTH_KEY_ID:}
+      private-key: ${APPLE_OAUTH_PRIVATE_KEY:}
+  ai:
+    claude:
+      api-key: ${CLAUDE_API_KEY:}
+  storage:
+    supabase:
+      endpoint: ${SUPABASE_STORAGE_ENDPOINT:}
+      bucket: ${SUPABASE_STORAGE_BUCKET:}
+      access-key: ${SUPABASE_STORAGE_ACCESS_KEY:}
+      secret-key: ${SUPABASE_STORAGE_SECRET_KEY:}
+  portone:
+    api-secret: ${PORTONE_API_SECRET:}
+    webhook-secret: ${PORTONE_WEBHOOK_SECRET:}
+    store-id: ${PORTONE_STORE_ID:}
+    channel-key: ${PORTONE_CHANNEL_KEY:}

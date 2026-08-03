@@ -10,7 +10,7 @@
 
 ## 작업 항목
 
-- [ ] `backend/`: Spring Boot 3.x + Gradle 프로젝트 초기화 (Java 21), [03] §4-1 패키지 구조(`global`/`domain`/`infrastructure`)로 세팅
+- [ ] `backend/`: Spring Boot 4.x + Gradle 프로젝트 초기화 (Java 21) — start.spring.io가 3.x 생성을 중단(`compatibility range >=4.0.0`)해 4.x로 시작, [03] §4-1 패키지 구조(`global`/`domain`/`infrastructure`)로 세팅
 - [ ] `frontend/`: Expo 프로젝트 초기화 (Expo Router, react-native-web) [03] §3-2
 - [ ] `admin/`: Vite + React + TypeScript 프로젝트 초기화 [03] §2-2
 - [ ] `database/migarations/`를 backend의 Flyway 마이그레이션 경로로 연결
