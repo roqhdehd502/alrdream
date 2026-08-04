@@ -32,6 +32,19 @@ springdoc:
   swagger-ui:
     path: /swagger-ui.html
 
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: never
+  health:
+    redis:
+      # Redis는 아직 배포 대상 호스팅이 정해지지 않음(로컬 docker-compose만 존재) — Phase 03에서 재검토
+      enabled: false
+
 # 아래 값들은 Phase 03(인증) / 06(AI 연동) / 09(PDF/Storage) / 11(결제)에서 실제 코드와 연동된다.
 # 지금은 [03] 설계 문서에 맞춰 설정 슬롯만 정의해둔다.
 app:

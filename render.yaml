@@ -1,0 +1,27 @@
+services:
+  - name: alrdream-backend
+    type: web
+    runtime: docker
+    plan: free
+    region: singapore
+
+    dockerfilePath: backend/Dockerfile
+    dockerContext: .
+
+    healthCheckPath: /actuator/health
+
+    autoDeployTrigger: commit
+    buildFilter:
+      include:
+        - backend/**
+        - database/migarations/**
+        - render.yaml
+
+    envVars:
+      # [03] §4-7 결제/§5 DB — 실제 값은 Render 대시보드에서 Blueprint 최초 적용 시 직접 입력한다.
+      - key: SUPABASE_DB_URL
+        sync: false
+      - key: SUPABASE_DB_USERNAME
+        sync: false
+      - key: SUPABASE_DB_PASSWORD
+        sync: false

@@ -39,6 +39,13 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "a7532e83-af2e-4db1-8808-79573ecc10ff"
+      }
+    },
+    "owner": "mwnas-team"
   }
 }

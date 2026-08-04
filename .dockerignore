@@ -1,0 +1,11 @@
+**/node_modules
+**/.git
+backend/build
+backend/.gradle
+frontend/ios
+frontend/android
+frontend/.expo
+frontend/dist
+admin/dist
+docs
+*.md

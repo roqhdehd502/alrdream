@@ -34,7 +34,7 @@ alrdream/
 | Database/Storage | Supabase (PostgreSQL + S3 호환 Storage)                                         |
 | AI               | Anthropic Claude API                                                            |
 | 결제             | 포트원(PortOne) V2, PG사: 토스페이먼츠                                          |
-| 배포             | Backend → Koyeb, Admin → Vercel, Frontend → EAS(내부/테스트 배포)               |
+| 배포             | Backend → Render, Admin → Vercel, Frontend → EAS(내부/테스트 배포)              |
 
 자세한 배경과 근거는 [03_design.md](./docs/03_design.md) 참고.
 
@@ -93,9 +93,9 @@ npm run dev        # http://localhost:5173
 
 | 대상             | 플랫폼                            | 비고                                                                                   |
 | ---------------- | --------------------------------- | -------------------------------------------------------------------------------------- |
-| Backend          | [Koyeb](https://www.koyeb.com)    | Docker 배포, 무료 인스턴스는 1시간 무 트래픽 시 스케일-투-제로                         |
+| Backend          | [Render](https://render.com)      | Docker 배포, 무료 Web Service는 15분 무 트래픽 시 스핀다운. `render.yaml`(Blueprint)로 정의, GitHub App이 push 시 자동 배포 (GitHub Actions 불필요) |
 | Admin            | [Vercel](https://vercel.com)      | Vite 정적 빌드 배포                                                                    |
 | Frontend         | [EAS Build](https://expo.dev/eas) | 내부/테스트 배포 (Android APK, iOS Ad-hoc/TestFlight) — 스토어 정식 출시는 스코프 아님 |
 | Database/Storage | [Supabase](https://supabase.com)  | PostgreSQL + Storage                                                                   |
 
-배포 파이프라인(GitHub Actions)은 마일스톤 Phase 01에서 최소 구성으로 먼저 검증한다.
+배포 파이프라인은 마일스톤 Phase 01에서 최소 구성으로 먼저 검증한다.
