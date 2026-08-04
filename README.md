@@ -107,6 +107,12 @@ npm run dev        # http://localhost:5173
 # 앱이 설문을 보여주기 위해 반드시 있어야 하는 데이터라 운영 DB에서는 실행하지 않는다.
 ./database/scripts/seed-down.sh          # 확인 프롬프트 후 삭제
 ./database/scripts/seed-down.sh --yes    # 확인 없이 바로 삭제
+
+# role별 로그인 테스트 계정 삽입/삭제 — ⚠️ 개발/스테이징 전용, 운영 DB에서는 절대 실행 금지
+# (database/seed-test-accounts.sql에 비밀번호 해시가 저장소에 그대로 공개되어 있음)
+./database/scripts/seed-test-accounts.sh              # admin@alrdream.test(ADMIN), user@alrdream.test(USER) 삽입
+./database/scripts/seed-test-accounts-down.sh          # 확인 프롬프트 후 삭제
+./database/scripts/seed-test-accounts-down.sh --yes    # 확인 없이 바로 삭제
 ```
 
 > `flyway_schema_history` 테이블 자체의 RLS 적용은 Flyway 마이그레이션이 아니라 앱의 `afterMigrate` 콜백(`EnableFlywaySchemaHistoryRlsCallback`)이 담당한다 — 자기 자신을 대상으로 하는 DDL을 일반 마이그레이션으로 실행하면 Flyway가 데드락에 빠지는 문제가 있어 우회했다. 따라서 `migrate.sh`만 단독 실행해서는 적용되지 않고, `./gradlew bootRun`(또는 실제 앱 배포)이 최소 한 번 부팅해야 적용된다.
@@ -117,11 +123,11 @@ npm run dev        # http://localhost:5173
 
 [03_design.md §6](./docs/03_design.md), [04_milestone.md Phase 01/14](./docs/04_milestone.md)에 따라 구성한다.
 
-| 대상             | 플랫폼                            | 비고                                                                                   |
-| ---------------- | --------------------------------- | -------------------------------------------------------------------------------------- |
+| 대상             | 플랫폼                            | 비고                                                                                                                                                |
+| ---------------- | --------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Backend          | [Render](https://render.com)      | Docker 배포, 무료 Web Service는 15분 무 트래픽 시 스핀다운. `render.yaml`(Blueprint)로 정의, GitHub App이 push 시 자동 배포 (GitHub Actions 불필요) |
-| Admin            | [Vercel](https://vercel.com)      | Vite 정적 빌드 배포                                                                    |
-| Frontend         | [EAS Build](https://expo.dev/eas) | 내부/테스트 배포 (Android APK, iOS Ad-hoc/TestFlight) — 스토어 정식 출시는 스코프 아님 |
-| Database/Storage | [Supabase](https://supabase.com)  | PostgreSQL + Storage                                                                   |
+| Admin            | [Vercel](https://vercel.com)      | Vite 정적 빌드 배포                                                                                                                                 |
+| Frontend         | [EAS Build](https://expo.dev/eas) | 내부/테스트 배포 (Android APK, iOS Ad-hoc/TestFlight) — 스토어 정식 출시는 스코프 아님                                                              |
+| Database/Storage | [Supabase](https://supabase.com)  | PostgreSQL + Storage                                                                                                                                |
 
 배포 파이프라인은 마일스톤 Phase 01에서 최소 구성으로 먼저 검증한다.

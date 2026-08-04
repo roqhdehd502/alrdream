@@ -71,7 +71,9 @@
 - [x] 자체 회원가입/로그인 (이메일 + 비밀번호) — `domain/member`(`Member`/`MemberRepository`/`AuthService`), BCrypt 해시. `POST /api/auth/signup`, `/login`
 - [x] OAuth2 소셜 로그인 — Google, Apple [03] §4-5. **설계 결정**: Spring Security의 OAuth2Client 리다이렉트 플로우 대신, Frontend(Expo 모바일)가 각 provider SDK로 발급받은 ID 토큰을 백엔드가 검증하는 방식으로 구현(`POST /api/auth/oauth/google`, `/apple`) — 모바일 앱에는 브라우저 리다이렉트보다 이 패턴이 표준적. Google은 `google-api-client`, Apple은 Apple JWKS(`nimbus-jose-jwt`)로 검증. Google은 실제 client-id로 배선 완료, **Apple은 Apple Developer 자격증명이 아직 없어(.env 비어있음) 코드만 구현, 실제 토큰으로 검증 안 됨** — 크리덴셜 채워지면 재검증 필요
 - [x] `role(USER/ADMIN)` 클레임 기반 인가, Admin API 라우트 분리 — `/api/admin/**`는 `ROLE_ADMIN` 필요. 실제 DB에서 role을 ADMIN으로 바꾼 계정으로 통과(→404, 매핑된 컨트롤러 없음)/USER 계정으로 차단(→403) 둘 다 실동작 검증
-- [x] Refresh Token 저장/무효화 (Redis) — `RefreshTokenStore`, 회원당 활성 세션 1개. Refresh 시 access+refresh 모두 회전(rotation), 회전 전 토큰 재사용 및 로그아웃 후 재사용 전부 거부되는 것까지 검증
+- [x] Refresh Token 저장/무효화 (Redis) — `RefreshTokenStore`, 회원당 활성 세션 1개. Refresh 시 access+refresh 모두 로테이션, 로테이션 전 토큰 재사용 및 로그아웃 후 재사용 전부 거부되는 것까지 검증
+- [x] Swagger(`/swagger-ui.html`) 문서화 — 배포 후 사용자가 각 API에 description이 비어있는 걸 발견해 추가. `global/config/OpenApiConfig`로 API 타이틀/설명 및 JWT Bearer 보안 스킴(`bearerAuth`) 정의, `AuthController`의 모든 엔드포인트에 `@Operation`/`@ApiResponse`, 요청/응답 DTO(`SignupRequest` 등)와 `ErrorResponse`에 `@Schema` 필드 설명 추가. 인증이 필요한 `/logout`, `/me`는 `@SecurityRequirement`로 표시해 Swagger UI의 Authorize 버튼으로 바로 테스트 가능. `/v3/api-docs` 실제 응답으로 summary/description/security/필드 설명이 모두 반영된 것 검증 완료. Phase 01 스파이크용 `PdfSmokeTestController`도 동일하게 문서화
+- [x] role별 로그인 테스트 계정 시드 — `database/seed-test-accounts.sql` + `database/scripts/seed-test-accounts.sh`/`seed-test-accounts-down.sh`. `admin@alrdream.test`(ADMIN)/`user@alrdream.test`(USER). `survey_definitions` 시드(운영에도 필요한 데이터)와 달리 이건 순수 테스트용이라 **운영 DB에 절대 실행 금지** — `seed.sql`과 분리된 별도 파일/스크립트로 관리해 실수로 함께 실행되지 않도록 함. 실제 Supabase에 삽입 후 두 계정 모두 로그인 → `/me`로 role 확인 → ADMIN은 `/api/admin/**` 통과(404)/USER는 차단(403) 실동작 검증 완료
 
 ### 테스트 중 발견해 함께 고친 버그 (auth 코드 자체는 아니지만 실제 요청으로 검증하다 발견)
 
