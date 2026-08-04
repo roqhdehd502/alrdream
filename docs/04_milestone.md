@@ -54,10 +54,11 @@
 
 ## 작업 항목
 
-- [ ] [03] §5 테이블 설계를 Flyway 마이그레이션(`V1__init.sql`)으로 작성: `users`, `workspaces`, `survey_definitions`, `survey_responses`, `planning_versions`, `analysis_versions`, `design_versions`, `documents`, `ai_generation_jobs`, `subscriptions`, `payment_history`, `usage_quotas`
-- [ ] 공통 `BaseEntity`(생성/수정 시각) 및 소프트 삭제용 `deleted_at` 적용 대상 테이블 정리
-- [ ] `survey_responses.answers`, `*_versions.content`에 대한 암호화 컨버터(`AttributeConverter`) 적용 [03] §5
-- [ ] `database/seed.sql`: 초기 `survey_definitions` 3종(`PLANNING_HAS_IDEA`, `PLANNING_EXPLORING`, `DESIGN`) 시드 데이터 삽입 ([02] §5 문항 그대로)
+- [x] [03] §5 테이블 설계를 Flyway 마이그레이션(`V1__initial_schema.sql`)으로 작성: `users`, `workspaces`, `survey_definitions`, `survey_responses`, `planning_versions`, `analysis_versions`, `design_versions`, `documents`, `ai_generation_jobs`, `subscriptions`, `payment_history`, `usage_quotas` — 로컬에서 실제 Supabase에 마이그레이션 적용 검증 완료 (기존 placeholder 파일명이 Flyway 네이밍 규칙(`V<n>__...`)과 맞지 않아 `V1__initial_schema.sql`로 정정)
+- [x] 공통 `BaseEntity`(생성/수정 시각, `global/jpa`) 및 소프트 삭제용 `SoftDeleteBaseEntity`(`deleted_at`) 작성 — `workspaces`/`planning_versions`/`analysis_versions`/`design_versions`만 상속 대상 (그 외 테이블은 소프트 삭제 대상 아님, [03] §5 삭제 정책 참고). `@EnableJpaAuditing` 설정 포함. 구체 도메인 엔티티는 각 도메인 Phase에서 작성
+- [x] `survey_responses.answers`, `*_versions.content`, `subscriptions.billing_key`에 적용할 AES-256-GCM 암호화 컨버터(`EncryptedStringConverter`, `global/security`) 작성 [03] §5 — DB 컬럼은 암호문을 담아야 하므로 JSONB가 아닌 TEXT로 설계 (구체 엔티티에 `@Convert` 적용은 각 도메인 Phase에서). 임시 엔티티로 암호화→저장→복호화 왕복 실동작 검증 완료. 검토 중 발견: `DATA_ENCRYPTION_KEY`가 비어 있으면(예: Render에 아직 미등록) `@Component`인 컨버터가 부팅 시점에 즉시 키를 만들려다 앱 전체가 기동 실패하는 버그가 있어, 키 검증을 실제 변환 호출 시점으로 미루도록 수정
+- [x] `database/seed.sql`: 초기 `survey_definitions` 3종(`PLANNING_HAS_IDEA`, `PLANNING_EXPLORING`, `DESIGN`) 시드 데이터 삽입 ([02] §5 문항 그대로) — 로컬에서 실제 Supabase에 삽입 검증 완료. `PLANNING_EXPLORING` Q1(`interested_fields`)은 문서에 선택지가 명시되지 않아 통상적인 업종 카테고리로 채움 — Admin 설문 관리(Phase 12) 완성 후 재검토 필요
+- [x] `V2__enable_row_level_security.sql`: 전 도메인 테이블에 RLS 활성화(정책 없음) [03] §5 — Supabase Table Editor에서 전 테이블이 "UNRESTRICTED"(Data API가 RLS 없이 익명 접근 가능)로 표시된 것을 발견해 추가. `FORCE` 없이 켜서 테이블 소유자(backend의 JDBC 연결)는 영향 없고 Data API(anon/authenticated)만 차단됨을 직접 검증 완료
 
 ---
 

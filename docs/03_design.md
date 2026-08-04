@@ -116,6 +116,7 @@ backend/src/main/java/com/alrdream
 ├── global
 │   ├── config
 │   ├── error
+│   ├── jpa                # BaseEntity/SoftDeleteBaseEntity, JPA Auditing 설정
 │   └── security
 ├── domain
 │   ├── member            # 사용자, 인증
@@ -247,6 +248,8 @@ PG사는 **토스페이먼츠(신모듈)**, 결제 게이트웨이는 **포트�
 **삭제 정책**: `workspaces`/`*_versions`는 `deleted_at` 기반 소프트 삭제를 기본으로 한다 ([01] 6, 9번의 다중 선택 삭제는 소프트 삭제로 처리, 목록/조회 API에서 필터링). 사용자가 완전 삭제(예: 회원 탈퇴에 따른 개인정보 삭제)를 요청하는 경우에 한해 하드 삭제 API를 별도로 제공한다. 상위 버전(기획)이 소프트 삭제되어도 이를 참조하는 하위 버전(분석/설계)은 조회만 가능하고 재생성은 막는다.
 
 **암호화**: `survey_responses.answers`, `*_versions.content`처럼 사용자의 사업 아이디어가 담긴 필드는 애플리케이션 레벨 암호화(AES-256, JPA `AttributeConverter` 또는 Jasypt)를 적용해 저장한다. 검색/통계가 필요 없는 필드이므로 암호화로 인한 쿼리 제약은 없음.
+
+**RLS(Row Level Security)**: Supabase는 테이블마다 PostgREST 기반 Data API를 자동 노출하며, RLS가 꺼진 테이블은 `anon`/`authenticated` 키만으로 누구나 HTTP로 직접 읽고 쓸 수 있다. 이 프로젝트는 Supabase Auth/클라이언트를 쓰지 않고 backend가 Session Pooler로 테이블 소유자 권한 JDBC 연결만 사용하므로, 모든 도메인 테이블에 RLS를 켜되 정책은 하나도 두지 않는다 — PostgreSQL은 기본적으로 테이블 소유자에게 RLS를 적용하지 않아(`FORCE ROW LEVEL SECURITY` 미설정) backend 접근은 영향이 없고, Data API(소유자 아님)만 완전히 차단된다.
 
 ---
 

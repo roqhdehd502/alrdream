@@ -48,6 +48,9 @@ management:
 # 아래 값들은 Phase 03(인증) / 06(AI 연동) / 09(PDF/Storage) / 11(결제)에서 실제 코드와 연동된다.
 # 지금은 [03] 설계 문서에 맞춰 설정 슬롯만 정의해둔다.
 app:
+  security:
+    # AES-256-GCM 키(Base64, 32바이트) — [03] §5 암호화 대상 컬럼에 사용. `openssl rand -base64 32`로 생성.
+    encryption-key: ${DATA_ENCRYPTION_KEY:}
   jwt:
     secret: ${JWT_SECRET:}
   oauth:

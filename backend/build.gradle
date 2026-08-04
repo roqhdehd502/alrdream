@@ -1,7 +1,18 @@
+// Flyway Gradle 플러그인은 buildscript classpath에서 별도로 동작하므로 PostgreSQL 드라이버를 여기서도 선언해야 한다.
+buildscript {
+	dependencies {
+		classpath 'org.flywaydb:flyway-database-postgresql:12.4.0'
+		classpath 'org.postgresql:postgresql:42.7.4'
+	}
+}
+
 plugins {
 	id 'java'
 	id 'org.springframework.boot' version '4.1.0'
 	id 'io.spring.dependency-management' version '1.1.7'
+	// database/scripts/migrate.sh 전용 — 앱 부팅 없이 Flyway 마이그레이션만 실행하기 위해 추가.
+	// flyway-core 버전은 spring-boot-starter-flyway가 관리하는 버전(12.4.0)과 맞춘다.
+	id 'org.flywaydb.flyway' version '12.4.0'
 }
 
 group = 'com.alrdream'
@@ -48,4 +59,10 @@ dependencies {
 
 tasks.named('test') {
 	useJUnitPlatform()
+}
+
+// database/scripts/migrate.sh 전용 설정. url/user/password/target은 스크립트가 FLYWAY_* 환경변수로 주입한다
+// (Flyway는 이 환경변수들을 기본 지원 — 자격증명을 build.gradle에 하드코딩하지 않기 위함).
+flyway {
+	locations = ['filesystem:../database/migarations']
 }
