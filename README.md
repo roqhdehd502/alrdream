@@ -109,6 +109,8 @@ npm run dev        # http://localhost:5173
 ./database/scripts/seed-down.sh --yes    # 확인 없이 바로 삭제
 ```
 
+> `flyway_schema_history` 테이블 자체의 RLS 적용은 Flyway 마이그레이션이 아니라 앱의 `afterMigrate` 콜백(`EnableFlywaySchemaHistoryRlsCallback`)이 담당한다 — 자기 자신을 대상으로 하는 DDL을 일반 마이그레이션으로 실행하면 Flyway가 데드락에 빠지는 문제가 있어 우회했다. 따라서 `migrate.sh`만 단독 실행해서는 적용되지 않고, `./gradlew bootRun`(또는 실제 앱 배포)이 최소 한 번 부팅해야 적용된다.
+
 ---
 
 ## 배포

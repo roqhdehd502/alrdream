@@ -59,7 +59,7 @@
 - [x] `survey_responses.answers`, `*_versions.content`, `subscriptions.billing_key`에 적용할 AES-256-GCM 암호화 컨버터(`EncryptedStringConverter`, `global/security`) 작성 [03] §5 — DB 컬럼은 암호문을 담아야 하므로 JSONB가 아닌 TEXT로 설계 (구체 엔티티에 `@Convert` 적용은 각 도메인 Phase에서). 임시 엔티티로 암호화→저장→복호화 왕복 실동작 검증 완료. 검토 중 발견: `DATA_ENCRYPTION_KEY`가 비어 있으면(예: Render에 아직 미등록) `@Component`인 컨버터가 부팅 시점에 즉시 키를 만들려다 앱 전체가 기동 실패하는 버그가 있어, 키 검증을 실제 변환 호출 시점으로 미루도록 수정
 - [x] `database/seed.sql`: 초기 `survey_definitions` 3종(`PLANNING_HAS_IDEA`, `PLANNING_EXPLORING`, `DESIGN`) 시드 데이터 삽입 ([02] §5 문항 그대로) — 로컬에서 실제 Supabase에 삽입 검증 완료. `PLANNING_EXPLORING` Q1(`interested_fields`)은 문서에 선택지가 명시되지 않아 통상적인 업종 카테고리로 채움 — Admin 설문 관리(Phase 12) 완성 후 재검토 필요
 - [x] `V2__enable_row_level_security.sql`: 전 도메인 테이블에 RLS 활성화(정책 없음) [03] §5 — Supabase Table Editor에서 전 테이블이 "UNRESTRICTED"(Data API가 RLS 없이 익명 접근 가능)로 표시된 것을 발견해 추가. `FORCE` 없이 켜서 테이블 소유자(backend의 JDBC 연결)는 영향 없고 Data API(anon/authenticated)만 차단됨을 직접 검증 완료
-- [x] `V3__enable_rls_flyway_schema_history.sql`: Flyway가 자체 생성하는 `flyway_schema_history`도 동일하게 RLS 적용 — 사용자가 대시보드에서 이 테이블만 "UNRESTRICTED"로 남아있는 걸 발견해 추가 요청. **알려진 이슈**: `database/scripts/migrate.sh`(Flyway Gradle 플러그인 경유)로 `flyway_schema_history` 자체를 대상으로 하는 DDL을 실행하면 매번 ~2분 뒤 statement timeout으로 실패함 (근본 원인 미상 — 재부팅으로도 재현됨, DB 락 문제는 아님). 반면 동일 SQL을 psql로 직접 실행하면 즉시 성공. 향후 이 테이블을 다시 건드리는 마이그레이션이 필요하면: ① psql로 DDL 직접 적용 → ② `flyway_schema_history`에 완료 행 수동 INSERT(checksum은 NULL) → ③ `./gradlew flywayRepair`로 체크섬 동기화, 순서로 우회할 것. 이번 건은 이 방식으로 적용 후 `flywayValidate` 통과 및 실제 앱 부팅으로 최종 검증 완료
+- [x] `flyway_schema_history`에도 동일하게 RLS 적용 — 사용자가 대시보드에서 이 테이블만 "UNRESTRICTED"로 남아있는 걸 발견해 추가 요청. **당시엔 `V3__enable_rls_flyway_schema_history.sql`이라는 일반 Flyway 마이그레이션으로 적용했고, psql 직접 실행 + 수동 INSERT + `flywayRepair` 우회로 임시 해결했었음** — 이후 Phase 03 테스트 중 근본 원인을 찾아 완전히 다른 방식으로 대체함 (아래 Phase 03 "테스트 중 발견해 함께 고친 버그" 참고), `V3__...sql` 파일은 삭제됨
 
 ---
 
@@ -67,11 +67,20 @@
 
 ## 작업 항목
 
-- [ ] Spring Security 6 + JWT(Access/Refresh) 기본 골격
-- [ ] 자체 회원가입/로그인 (이메일 + 비밀번호)
-- [ ] OAuth2 소셜 로그인 — Google, Apple [03] §4-5
-- [ ] `role(USER/ADMIN)` 클레임 기반 인가, Admin API 라우트 분리
-- [ ] Refresh Token 저장/무효화 (Redis)
+- [x] Spring Security 6 + JWT(Access/Refresh) 기본 골격 — `global/security`(`JwtTokenProvider`, `JwtAuthenticationFilter`, `SecurityConfig`), stateless. Access 30분/Refresh 14일
+- [x] 자체 회원가입/로그인 (이메일 + 비밀번호) — `domain/member`(`Member`/`MemberRepository`/`AuthService`), BCrypt 해시. `POST /api/auth/signup`, `/login`
+- [x] OAuth2 소셜 로그인 — Google, Apple [03] §4-5. **설계 결정**: Spring Security의 OAuth2Client 리다이렉트 플로우 대신, Frontend(Expo 모바일)가 각 provider SDK로 발급받은 ID 토큰을 백엔드가 검증하는 방식으로 구현(`POST /api/auth/oauth/google`, `/apple`) — 모바일 앱에는 브라우저 리다이렉트보다 이 패턴이 표준적. Google은 `google-api-client`, Apple은 Apple JWKS(`nimbus-jose-jwt`)로 검증. Google은 실제 client-id로 배선 완료, **Apple은 Apple Developer 자격증명이 아직 없어(.env 비어있음) 코드만 구현, 실제 토큰으로 검증 안 됨** — 크리덴셜 채워지면 재검증 필요
+- [x] `role(USER/ADMIN)` 클레임 기반 인가, Admin API 라우트 분리 — `/api/admin/**`는 `ROLE_ADMIN` 필요. 실제 DB에서 role을 ADMIN으로 바꾼 계정으로 통과(→404, 매핑된 컨트롤러 없음)/USER 계정으로 차단(→403) 둘 다 실동작 검증
+- [x] Refresh Token 저장/무효화 (Redis) — `RefreshTokenStore`, 회원당 활성 세션 1개. Refresh 시 access+refresh 모두 회전(rotation), 회전 전 토큰 재사용 및 로그아웃 후 재사용 전부 거부되는 것까지 검증
+
+### 테스트 중 발견해 함께 고친 버그 (auth 코드 자체는 아니지만 실제 요청으로 검증하다 발견)
+
+- `BaseEntity`(`OffsetDateTime`)와 Spring Data JPA Auditing 기본 `DateTimeProvider`(`LocalDateTime` 생성)가 타입 불일치로 모든 INSERT가 500 — `JpaAuditingConfig`에 `OffsetDateTime`을 반환하는 커스텀 `DateTimeProvider` 등록으로 해결. 이 프로젝트의 첫 엔티티(`Member`)라 이제야 드러남
+- `GlobalExceptionHandler`의 `catch(Exception e)`가 로깅 없이 예외를 삼켜 원인 파악이 불가능했음 — `log.error` 추가
+- 같은 핸들러가 너무 광범위해 `NoResourceFoundException`(매핑 안 된 경로, 원래 404)까지 500으로 덮어씀 — 전용 핸들러 추가해 404 유지
+- Spring Boot 4.x의 자동 구성 `ObjectMapper` 빈이 Jackson 3.x(`tools.jackson`) 타입이라 `SecurityConfig`가 기대하던 Jackson 2.x(`com.fasterxml.jackson`) 타입과 안 맞아 부팅 실패 — 빈 주입 대신 `SecurityConfig` 내부에서 독립적으로 생성하도록 변경
+- 테스트 중 Supabase Session Pooler(pool_size=15)가 가득 차 연결 불가 상태 발생 — HikariCP 기본 max-pool-size(10)가 이 예산에 비해 과함을 확인, `application.yml`에 `spring.datasource.hikari.maximum-pool-size: 5` 명시
+- **`./gradlew test`가 항상 멈춤(진짜 데드락) — Phase 02 때의 "Flyway Gradle 플러그인이 V3에서 멈춘다"는 문제의 근본 원인을 여기서 확정**: `flyway_schema_history` 자신을 대상으로 하는 DDL을 Flyway가 추적하는 일반 마이그레이션으로 실행하면, Flyway가 같은 히스토리 테이블을 동시에 두 커넥션으로 다루면서(한 커넥션은 `SELECT COUNT(*) FROM pg_namespace...` 실행 후 "idle in transaction"으로 대기, 다른 커넥션은 그 커넥션이 쥔 락을 기다리며 `ALTER TABLE` 실행 대기) 자기 자신과 락이 걸려 영원히 풀리지 않는다. Supabase뿐 아니라 로컬 Testcontainers(순정 Postgres, 커넥션 풀러 없음)에서도 100% 즉시 재현되어 Supabase/풀러 특이 문제가 아님을 확인. **해결**: `V3__enable_rls_flyway_schema_history.sql`을 완전히 제거하고, `global/flyway/EnableFlywaySchemaHistoryRlsCallback`(Flyway `Callback`, `AFTER_MIGRATE` 이벤트)으로 대체 — migrate() 전체가 끝나고 내부 락/커넥션이 정리된 뒤 실행되므로 데드락 여지가 없다. `ENABLE ROW LEVEL SECURITY`는 멱등이라 매번 재실행해도 안전. 프로덕션 Supabase의 `flyway_schema_history`에서 기존 V3 이력 행도 정리(`DELETE ... WHERE version='3'`). 검증: RLS를 수동으로 껐다가 `bootRun` 재실행 시 콜백이 재적용하는 것 확인, `./gradlew test`가 데드락 없이 8초 만에 `BUILD SUCCESSFUL`
 
 ---
 

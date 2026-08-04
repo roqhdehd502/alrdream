@@ -179,6 +179,7 @@ Controller → UseCase → PromptBuilder → AiClient(interface) → LLM Provide
 - 로그인 방식: 자체 회원가입/로그인(이메일+비밀번호) + OAuth2 소셜 로그인(Google, Apple)
   - `users.provider`를 `LOCAL | GOOGLE | APPLE | ...`로 두어, 이후 Provider가 추가돼도 컬럼/로직 구조 변경 없이 값만 늘어나도록 설계
   - Apple 로그인은 iOS 앱스토어 심사 정책상(소셜 로그인 제공 시 Apple 로그인 필수) 요구되는 항목이라 초기부터 포함
+  - **구현 방식**: Spring Security의 OAuth2Client(브라우저 리다이렉트 기반) 대신, Frontend(Expo 모바일)가 각 provider 네이티브 SDK로 발급받은 ID 토큰을 백엔드가 검증하는 방식을 쓴다(`POST /api/auth/oauth/{google|apple}`). 모바일 앱은 서버로의 브라우저 리다이렉트가 부자연스러워, 클라이언트가 SDK로 직접 토큰을 받고 백엔드는 서명·발급자·audience만 검증하는 편이 UX·구현 모두 더 적합
 - `role: USER | ADMIN` 클레임으로 Admin API 접근을 분리 (별도 Admin 전용 서버 없이 하나의 백엔드에서 권한만 분리)
 
 ## 4-6. PDF 생성

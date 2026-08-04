@@ -9,6 +9,11 @@ spring:
     url: ${SUPABASE_DB_URL}
     username: ${SUPABASE_DB_USERNAME}
     password: ${SUPABASE_DB_PASSWORD}
+    hikari:
+      # Supabase Session Pooler(Supavisor)는 pool_size=15로 전체 프로젝트 공유 — HikariCP 기본값(10)은
+      # 앱 인스턴스 하나만으로도 이 예산 대부분을 차지해 다른 연결(psql, 다른 인스턴스 등)을 막을 수 있다.
+      # Render 무료 인스턴스는 0.1 vCPU라 애초에 동시 커넥션이 많이 필요하지도 않다.
+      maximum-pool-size: 5
 
   jpa:
     open-in-view: false
@@ -45,7 +50,7 @@ management:
       # Redis는 아직 배포 대상 호스팅이 정해지지 않음(로컬 docker-compose만 존재) — Phase 03에서 재검토
       enabled: false
 
-# 아래 값들은 Phase 03(인증) / 06(AI 연동) / 09(PDF/Storage) / 11(결제)에서 실제 코드와 연동된다.
+# jwt/oauth는 Phase 03에서 실제 코드와 연동 완료. ai/storage/portone은 각 도메인 Phase(06/09/11)에서 연동 예정 —
 # 지금은 [03] 설계 문서에 맞춰 설정 슬롯만 정의해둔다.
 app:
   security:
@@ -53,6 +58,8 @@ app:
     encryption-key: ${DATA_ENCRYPTION_KEY:}
   jwt:
     secret: ${JWT_SECRET:}
+    access-token-validity-seconds: 1800    # 30분
+    refresh-token-validity-seconds: 1209600  # 14일
   oauth:
     google:
       client-id: ${GOOGLE_OAUTH_CLIENT_ID:}
