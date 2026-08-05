@@ -305,8 +305,45 @@
 
 ## 작업 항목
 
-- [ ] 설계 생성 — `DESIGN` 설문 + 분석 결과를 함께 입력으로 AI 생성 [01] 10번
-- [ ] 설계 수정 — 이전 응답 불러와 편집 후 재생성, 버전 기록 [01] 11번
+- [x] 설계 생성 — `DESIGN` 설문 + 분석 결과를 함께 입력으로 AI 생성 [01] 10번
+- [x] 설계 수정 — 이전 응답 불러와 편집 후 재생성, 버전 기록 [01] 11번
+
+## 설계 결정
+
+- **"생성"과 "수정"은 같은 엔드포인트**: Planning과 동일한 패턴 — `POST .../analysis-versions/{id}/design-versions`가
+  [01] 10번과 11번을 모두 처리한다. "수정"은 편집된 답변으로 새 DESIGN 설문 응답을 먼저 제출한 뒤 그 응답으로
+  다시 호출하는 방식.
+- **경로 중첩이 도메인 의존 관계 그대로**: `/workspaces/{id}/planning-versions/{id}/analysis-versions/{id}
+  /design-versions` — [03] §4-2의 `design → analysis(특정 버전), survey_response` 참조 관계와 DB FK 체인
+  (`design_versions.analysis_version_id → analysis_versions.planning_version_id →
+  planning_versions.workspace_id`)을 그대로 URL로 옮겼다. 4단계 중첩이지만 각 단계의 소유권 검증을 하위
+  서비스가 상위 서비스의 `getOwned`를 그대로 재사용해 사슬로 연결할 수 있어 구현은 오히려 단순했다
+  (`DesignVersionService` → `AnalysisVersionService.getOwned` → 내부적으로 `PlanningVersionService.getOwned`
+  → `WorkspaceService.getOwned`).
+- **[02] §6 — 이전 단계 컨텍스트 누적**: 설계 생성 프롬프트에는 (1) 원본 기획 단계 설문 응답, (2) 분석 결과
+  전체(JSON), (3) 이번 설계 설문 응답을 모두 포함한다. `design_versions`는 `analysis_version_id`만 참조하고
+  있어, 원본 기획 설문 응답을 얻으려면 `planning_version`을 한 번 더 거쳐야 했다(`analysisVersion` →
+  `planningVersionId` → `planningVersion.surveyResponseId`).
+- **콘텐츠 구조**: 역시 문서에 명시가 없어 [02] §5-3 DESIGN 설문 문항에 1:1 대응하는 구조로 설계했다 —
+  선택된 핵심 기능별 명세(`feature_specification`), MVP 확정 범위, 기술 스택/아키텍처(제약 반영 근거 포함),
+  플랫폼 전략, 데이터/개인정보 처리 방안, 화면/시스템 구조, 개발 단계별 계획.
+- **버전 번호 경합 방지**: Phase 05/07/08과 동일하게 `pg_advisory_xact_lock`으로 분석 버전 단위 직렬화.
+
+## 테스트 결과
+
+시드 테스트 계정으로 워크스페이스 생성 → 설문 제출 → 기획 생성 → 분석 생성 → DESIGN 설문 응답(분석의
+동적 옵션 사용) → 설계 생성까지 전체 사슬을 실제 계정/DB로 end-to-end 검증했다. 무료로 막히는 검증(DESIGN이
+아닌 응답 사용, 존재하지 않는 분석 ID, 소유권, 존재하지 않는 ID로 삭제)은 AI 호출 없이 확인했다.
+
+- **핵심 통합 시나리오**: 설계 설문(Q1)에서 고른 4개 핵심 기능이 생성된 설계 문서의 `feature_specification`에
+  정확히, 같은 순서로 상세 명세됨을 확인. Q3(1인 개발/3개월/500만원 제약)이 권장 기술 스택(Next.js +
+  Supabase 조합, 별도 서버 인프라 없는 BaaS 중심 아키텍처) 선정 근거에 정확히 반영됨을 확인. Q4(웹 우선),
+  Q5(개인정보 민감)도 각각 `platform_plan`, `data_and_privacy`에 정확히 반영됨을 확인.
+- Job 폴링, 목록/상세 조회, 다중 삭제, 삭제 후 재조회 시 400 처리까지 모두 정상.
+- `usage_quotas.generation_count`가 정확히 3(기획/분석/설계 각 1회 성공)만 차감됨을 DB로 직접 확인.
+- `design_versions.content`가 Base64 암호문으로 저장됨을 psql로 직접 확인.
+- 이번 phase에서 발견된 버그는 없음(3단계 전체 사슬이 첫 실행에 정상 동작). 테스트 데이터 정리 완료,
+  `./gradlew test` 통과.
 
 ---
 
