@@ -90,9 +90,18 @@
 
 ## 작업 항목
 
-- [ ] 워크스페이스 생성 API — "아이템 있음/고민 중" 분기 처리 [01] 2번
-- [ ] 워크스페이스 목록/상세 조회 API (기획/분석/설계/설정 탭 데이터) [01] 3번
-- [ ] 워크스페이스 수정/삭제 API [01] 4번
+- [x] 워크스페이스 생성 API — "아이템 있음/고민 중" 분기 처리 [01] 2번. **설계 결정**: `workspaces` 테이블(§5)에는 분기를 저장할 컬럼이 없다 — 분기 선택은 프론트에서 다음에 어떤 설문(`PLANNING_HAS_IDEA`/`PLANNING_EXPLORING`)을 보여줄지 결정하는 라우팅 정보일 뿐이고, 실제로 영속화되는 신호는 이후 제출되는 `survey_responses.survey_definition_id`(Phase 05)다. 그래서 `POST /api/workspaces`는 `name`만 받는다
+- [x] 워크스페이스 목록/상세 조회 API (기획/분석/설계/설정 탭 데이터) [01] 3번 — 상세 조회는 워크스페이스 자체 정보만 반환한다. 기획/분석/설계 탭의 실제 버전 데이터는 아직 해당 도메인이 없어(Phase 05+) 각자 도메인이 생기면 별도 하위 리소스 API로 채워질 예정
+- [x] 워크스페이스 수정/삭제 API [01] 4번 — 수정은 이름 변경만(현재 상태는 ACTIVE 하나뿐이라 상태 변경 API는 없음), 삭제는 소프트 삭제(`deleted_at`)
+- [x] `V3__finalize_workspace_status.sql`: `V1__initial_schema.sql`이 "Phase 04에서 확정" 주석으로 남겨뒀던 `workspaces.status` CHECK 제약을 `('ACTIVE')`로 확정 — [01] 문서에 다른 상태 전이가 없어 다른 상태 컬럼들과 동일한 패턴(CHECK 명시)만 맞추고 값은 하나만 허용
+- [x] 소유권 격리 — 모든 조회/수정/삭제는 `WHERE user_id = 현재 로그인한 회원` 조건이 걸린 단일 쿼리로 처리해, 다른 회원의 워크스페이스는 존재 자체가 노출되지 않고 "존재하지 않음"(400)으로 응답. 실제 두 계정(role별 테스트 계정)으로 교차 접근 시도해 격리 검증 완료
+- [x] Swagger 문서화 — Phase 03에서 만든 패턴(`@Tag`/`@Operation`/`@ApiResponse`/`bearerAuth`)을 동일하게 적용
+- [x] 목록 조회 페이징/정렬/검색 — 초기 구현이 전체를 한 번에 반환하는 방식이었는데, 워크스페이스 생성 개수에 제한이 없어 사용자가 많아지면 그대로 무리가 될 수 있다는 지적을 받고 추가. `[03] §4-1`에 명시된 대로 Querydsl로 구현(`WorkspaceQueryRepository`/`WorkspaceQueryRepositoryImpl`, 프로젝트 첫 Querydsl 사용처라 `JPAQueryFactory` 빈(`global/config/QuerydslConfig`)도 함께 추가). `GET /api/workspaces?page=&size=&sort=&keyword=` — 표준 Spring Data `Pageable`(정렬 가능 필드: `name`/`createdAt`/`updatedAt`, 기본값 `createdAt,desc`) + 이름 부분/대소문자 무시 검색. 응답은 `PagedModel`로 감싸 `{content, page}` 형태로 고정(Spring Data가 `Page`/`PageImpl` 직접 직렬화를 권장하지 않음). Swagger에 `page`/`size`/`sort` 필드가 각각 노출되도록 `@ParameterObject` 적용
+
+### 테스트 중 발견해 함께 고친 버그
+
+- `@Valid`로 검증하는 요청 DTO(`CreateWorkspaceRequest` 등)가 검증에 실패하면 `MethodArgumentNotValidException`을 처리하는 핸들러가 없어 `GlobalExceptionHandler`의 catch-all에 걸려 500으로 응답되고 있었음 — Phase 03에서 발견한 `NoResourceFoundException` 건과 같은 종류의, Phase 00 스캐폴딩부터 있던 잠재 버그(회원가입 `SignupRequest`도 동일하게 영향받고 있었음). 전용 핸들러를 추가해 필드별 메시지와 함께 400을 반환하도록 수정
+- 지원하지 않는 정렬 필드(`?sort=bogus,asc`)를 넣으면 400이 아니라 500이 나옴 — `WorkspaceQueryRepositoryImpl`(`@Repository`)에서 `IllegalArgumentException`을 던졌는데, Spring의 JPA 예외 변환(`PersistenceExceptionTranslationInterceptor`)이 `@Repository` 빈에서 나온 `IllegalArgumentException`/`IllegalStateException`을 무조건 `InvalidDataAccessApiUsageException`으로 감싸버려 `GlobalExceptionHandler`의 전용 핸들러를 못 타는 게 원인 — Spring의 잘 알려진 함정. 정렬 필드 검증을 `@Repository`가 아닌 `@Service`(`WorkspaceService`) 경계로 옮겨 해결
 
 ---
 

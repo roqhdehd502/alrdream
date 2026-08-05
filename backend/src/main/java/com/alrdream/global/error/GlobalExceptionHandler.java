@@ -1,8 +1,10 @@
 package com.alrdream.global.error;
 
+import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
@@ -15,6 +17,15 @@ public class GlobalExceptionHandler {
 	@ExceptionHandler(IllegalArgumentException.class)
 	public ResponseEntity<ErrorResponse> handleIllegalArgument(IllegalArgumentException e) {
 		return ResponseEntity.badRequest().body(new ErrorResponse("BAD_REQUEST", e.getMessage()));
+	}
+
+	// @Valid로 검증되는 요청 DTO(record)가 실패했을 때 — 이것도 다른 핸들러 없이는 catch-all에 걸려 500이 된다.
+	@ExceptionHandler(MethodArgumentNotValidException.class)
+	public ResponseEntity<ErrorResponse> handleValidation(MethodArgumentNotValidException e) {
+		String message = e.getBindingResult().getFieldErrors().stream()
+				.map(error -> error.getField() + ": " + error.getDefaultMessage())
+				.collect(Collectors.joining(", "));
+		return ResponseEntity.badRequest().body(new ErrorResponse("BAD_REQUEST", message));
 	}
 
 	// 매핑된 컨트롤러가 없는 경로 — catch-all Exception 핸들러가 가로채 500으로 뭉개기 전에 먼저 처리해 404를 유지한다.
