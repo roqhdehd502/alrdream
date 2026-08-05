@@ -72,6 +72,16 @@ app:
   ai:
     claude:
       api-key: ${CLAUDE_API_KEY:}
+      base-url: https://api.anthropic.com
+      api-version: "2023-06-01"
+      model: claude-sonnet-5
+      max-tokens: 8000
+      connect-timeout-seconds: 10
+      # LLM 생성은 수십 초가 걸릴 수 있어 넉넉히 잡는다 — Virtual Thread 비동기 Job 안에서 실행되므로
+      # 요청 스레드를 오래 붙잡지 않는다 (Phase 06, AiGenerationJobService).
+      read-timeout-seconds: 120
+    # [01] 13번 — FREE 플랜의 월별 AI 생성 횟수 제한. PRO는 무제한(UsageQuotaService).
+    free-tier-monthly-limit: 5
   storage:
     supabase:
       endpoint: ${SUPABASE_STORAGE_ENDPOINT:}

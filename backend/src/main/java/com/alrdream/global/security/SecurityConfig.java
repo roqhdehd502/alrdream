@@ -49,7 +49,9 @@ public class SecurityConfig {
 								"/swagger-ui/**",
 								"/swagger-ui.html",
 								"/v3/api-docs/**",
-								"/spike/**")
+								// 스파이크 엔드포인트 중 인증 불필요한 것만 개별 허용 — AI 스모크 테스트는 사용자별
+								// quota 확인이 목적이라 일반 API처럼 인증이 필요하다.
+								"/spike/pdf-smoke-test")
 						.permitAll()
 						.requestMatchers("/api/admin/**").hasRole("ADMIN")
 						.anyRequest().authenticated())

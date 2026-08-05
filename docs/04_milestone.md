@@ -136,11 +136,69 @@
 
 ## 작업 항목
 
-- [ ] `AiClient` 인터페이스 + Claude API 구현체 (`@HttpExchange`) [03] §4-3
-- [ ] `PromptBuilder` — `promptKey` → 프롬프트 템플릿 변수 매핑 [02] §6
-- [ ] Claude Tool Use 기반 Structured Output 파싱 (섹션별 JSON 스키마 강제)
-- [ ] `ai_generation_jobs` 비동기 처리 (Virtual Thread) + Job 상태 폴링 API [03] §4-4
-- [ ] `ai_generation_jobs` 생성 전 Free 티어 사용량(`usage_quotas`) 체크 — 초과 시 429 응답 [01] 13번 (생성 진입점이 이 한 곳뿐이라 여기서 공통 처리)
+- [x] `AiClient` 인터페이스 + Claude API 구현체 (`@HttpExchange`) [03] §4-3
+- [x] `PromptBuilder` — `promptKey` → 프롬프트 템플릿 변수 매핑 [02] §6
+- [x] Claude Tool Use 기반 Structured Output 파싱 (섹션별 JSON 스키마 강제)
+- [x] `ai_generation_jobs` 비동기 처리 (Virtual Thread) + Job 상태 폴링 API [03] §4-4
+- [x] `ai_generation_jobs` 생성 전 Free 티어 사용량(`usage_quotas`) 체크 — 초과 시 429 응답 [01] 13번 (생성 진입점이 이 한 곳뿐이라 여기서 공통 처리)
+
+## 설계 결정
+
+- **범위**: 이 Phase는 [03] §4-3/§4-4가 요구하는 재사용 가능한 AI 연동 "인프라"만 구현한다. 실제 기획/분석/설계
+  콘텐츠의 시스템 프롬프트 구성·섹션 스키마·생성 결과 저장은 각 도메인이 알아야 할 지식이라 Phase 07~09에서
+  다룬다. `AiGenerationJobService.submit(userId, targetType, targetId, task)`가 Job 생명주기(PENDING →
+  PROCESSING → COMPLETED|FAILED)와 Virtual Thread 비동기 실행을 맡고, `task`(프롬프트 구성 → `AiClient` 호출 →
+  파싱 → 저장)는 호출하는 도메인이 람다로 넘긴다.
+- **`ai_generation_jobs.user_id` 컬럼 추가** (`V4__add_user_id_to_ai_generation_jobs.sql`): [03] §5 원안에는
+  없었으나, Job 상태 폴링 API가 본인이 생성한 Job만 조회하도록 해야 하는데 `target_id`가 다형 참조라 target
+  테이블 조인으로는 소유권을 확인할 수 없다. Job이 스스로 소유자를 들고 있는 편이 단순하고 안전해 컬럼을 추가했다.
+- **Job 커밋 후 실행**: `submit()`이 Job을 저장한 트랜잭션이 커밋되기 전에 Virtual Thread가 먼저 그 Job을
+  조회하면 아직 보이지 않는 레코드를 찾는 경합이 생길 수 있어, `TransactionSynchronizationManager`로
+  `afterCommit` 이후에만 비동기 실행을 시작하도록 했다 (트랜잭션이 없는 컨텍스트에서 호출되면 즉시 실행).
+- **FREE 티어 quota 동시성**: `usage_quotas`도 Phase 05의 `survey_definitions` 버전 발행과 같은 종류의 경합
+  가능성이 있다 — 동시 요청이 같은 사용자·기간의 quota row를 동시에 최초 생성하려다 `UNIQUE(user_id, period)`
+  위반이 나거나, 한도 검사를 동시에 통과해 실제 한도보다 더 많이 생성될 수 있다. `pg_advisory_xact_lock`으로
+  사용자+기간 단위 직렬화해 미연에 방지했다(실제 동시 요청으로 재현하기 전에 코드 리뷰 단계에서 발견).
+- **PRO는 quota row 자체를 만들지 않음**: `UsageQuotaService.checkAndIncrement`는 `member.getPlan() == PRO`면
+  `usage_quotas` 테이블에 아예 손대지 않고 즉시 반환한다 — PRO 사용자는 quota 추적 대상이 아니라는 걸 DB
+  상태로도 명확히 한다.
+- **Jackson 3(`tools.jackson`) 채택**: `jjwt-jackson` 등 기존 라이브러리는 Jackson 2.x를 요구해 여러 클래스에서
+  로컬 Jackson 2.x `ObjectMapper`를 관례적으로 써왔지만(Phase 03~05), Claude 전용 `RestClient`는 그런 레거시
+  제약이 없는 새 컴포넌트라 Spring 7의 현재 권장 스택인 Jackson 3(`tools.jackson.databind.json.JsonMapper`)을
+  그대로 썼다. `RestClient.Builder.messageConverters(...)`는 Spring 7.0부터 제거 예정으로 deprecated돼 있어
+  `configureMessageConverters(...).withJsonConverter(...)`를 사용했다.
+- **모델 id**: `app.ai.claude.model` 기본값은 `claude-sonnet-5` — 실제 API 키로 `GET /v1/models`를 호출해
+  키가 접근 가능한 모델 목록에서 확인한 값이다(추측 아님). 환경변수로 얼마든지 교체 가능하도록 설정값으로 뺐다.
+- **스파이크 엔드포인트**: `POST /spike/ai-generation-smoke-test` (인증 필요)로 quota 체크 → Job 생성 → Claude
+  호출 → Tool Use 구조화 출력 파싱까지 전체 파이프라인을 실제로 검증한다. Phase 01의 PDF 스모크 테스트와 같은
+  성격 — Phase 07이 실제 생성 흐름을 만들면 삭제 예정. PDF 스모크 테스트와 달리 사용자별 quota를 다뤄야 해서
+  `/spike/**` 전체가 아니라 `/spike/pdf-smoke-test`만 인증 예외로 좁혔다(`SecurityConfig`).
+
+## 테스트 결과
+
+실제 발급받은 Claude API 키(`GET https://api.anthropic.com/v1/models`)로 모델 id를 확인 후, 시드 테스트
+계정(`user@alrdream.test`, `admin@alrdream.test`)으로 실제 Supabase + 배포 중인 앱에 대해 검증했다.
+
+- **quota 체크 → Job 생성 → 비동기 처리 → 폴링 전체 파이프라인**: `POST /spike/ai-generation-smoke-test` 호출 시
+  quota 즉시 차감, `PENDING` Job이 즉시 반환됨을 확인. `GET /api/ai-generation-jobs/{jobId}` 폴링으로
+  `PROCESSING`을 거쳐 최종 상태로 전이되는 것을 확인.
+- **Claude API 실호출 — happy path 확인 완료**: 최초 시도 시 API 키 크레딧 잔액 부족으로
+  `"Your credit balance is too low..."` 오류가 났는데(인증·요청 스키마 검증은 모두 통과한 뒤 과금 단계에서만
+  나는 오류라 요청 형식이 올바르다는 근거는 이때 이미 확보), `AiGenerationException` → Job `FAILED` 전이 및
+  `error_message` 기록까지 정상 확인. 이후 크레딧 충전 후 재호출(총 1회, 크레딧 절약을 위해 최소 호출로 진행)
+  — Tool Use로 강제한 JSON이 스키마 그대로 파싱되어 `COMPLETED`로 전이됨을 확인
+  (`{"one_line_summary":"야근이 많은 직장인을 위한 저녁 식사 정기 배달 구독 서비스","target_customer":"야근이 잦은 직장인"}`).
+  이번 phase에서 발견된 버그는 없음.
+- **FREE 티어 한도 강제**: `free-tier-monthly-limit=5`로 5회는 200, 6번째 호출은 정확히
+  `429 {"code":"QUOTA_EXCEEDED"}` 반환 확인.
+- **PRO 무제한**: 테스트 계정 plan을 임시로 `PRO`로 전환해 6회 연속 호출 모두 200 확인(quota 체크를 아예
+  건너뜀 — `usage_quotas`에 row가 생성되지 않는 것도 DB로 직접 확인), 이후 `FREE`로 원복.
+- **소유권 격리**: 다른 사용자(admin)가 user의 jobId로 폴링 시 `400 존재하지 않는 작업입니다` 확인(레코드
+  존재 여부를 노출하지 않음).
+- **인증 요구**: `/spike/ai-generation-smoke-test`, `/api/ai-generation-jobs/{jobId}` 모두 토큰 없이 401 확인.
+- **`PromptBuilder` 매핑 로직**: jshell로 직접 검증 — questionId→promptKey 매핑, `isUnknown=true` 답변의
+  플래그 텍스트 치환, 스키마에 없는 questionId 무시 모두 의도대로 동작.
+- 테스트로 생성된 `ai_generation_jobs`(11건)/`usage_quotas`(1건)는 정리 완료, `./gradlew test` 통과.
 
 ---
 

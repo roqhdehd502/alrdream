@@ -66,6 +66,13 @@ public class GlobalExceptionHandler {
 				.body(new ErrorResponse("UNSUPPORTED_MEDIA_TYPE", "지원하지 않는 Content-Type입니다."));
 	}
 
+	// [01] 13번 — FREE 플랜 월별 AI 생성 횟수 한도 초과.
+	@ExceptionHandler(TooManyRequestsException.class)
+	public ResponseEntity<ErrorResponse> handleTooManyRequests(TooManyRequestsException e) {
+		return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+				.body(new ErrorResponse("QUOTA_EXCEEDED", e.getMessage()));
+	}
+
 	@ExceptionHandler(Exception.class)
 	public ResponseEntity<ErrorResponse> handleUnexpected(Exception e) {
 		log.error("예기치 못한 오류가 발생했습니다.", e);
