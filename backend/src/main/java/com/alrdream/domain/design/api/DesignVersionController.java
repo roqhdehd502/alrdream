@@ -7,6 +7,7 @@ import com.alrdream.domain.design.api.dto.DeleteDesignVersionsRequest;
 import com.alrdream.domain.design.api.dto.DesignVersionDetail;
 import com.alrdream.domain.design.api.dto.DesignVersionSummary;
 import com.alrdream.domain.design.application.DesignVersionService;
+import com.alrdream.domain.document.api.dto.DocumentResponse;
 import com.alrdream.global.error.ErrorResponse;
 import com.alrdream.global.security.MemberPrincipal;
 import io.swagger.v3.oas.annotations.Operation;
@@ -94,6 +95,24 @@ public class DesignVersionController {
 			@PathVariable UUID designVersionId) {
 		return ResponseEntity.ok(DesignVersionDetail.of(designVersionService.getOwned(
 				designVersionId, analysisVersionId, planningVersionId, workspaceId, principal.memberId())));
+	}
+
+	@Operation(
+			summary = "설계 PDF 다운로드",
+			description = "[03] §4-6 — 완료된 설계를 PDF로 렌더링해 Supabase Storage에 업로드하고 서명 URL을 반환한다. "
+					+ "이미 생성된 적이 있으면(content는 불변) 다시 렌더링하지 않고 서명 URL만 새로 발급한다.")
+	@ApiResponse(responseCode = "200", description = "발급 성공")
+	@ApiResponse(responseCode = "400", description = "존재하지 않는 설계이거나 아직 생성이 완료되지 않음",
+			content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+	@PostMapping("/{designVersionId}/pdf")
+	public ResponseEntity<DocumentResponse> generatePdf(
+			@AuthenticationPrincipal MemberPrincipal principal,
+			@PathVariable UUID workspaceId,
+			@PathVariable UUID planningVersionId,
+			@PathVariable UUID analysisVersionId,
+			@PathVariable UUID designVersionId) {
+		return ResponseEntity.ok(designVersionService.generatePdf(
+				designVersionId, analysisVersionId, planningVersionId, workspaceId, principal.memberId()));
 	}
 
 	@Operation(summary = "설계 버전 다중 삭제", description = "소프트 삭제. 지정한 ID 중 하나라도 존재하지 않으면 전체가 실패한다.")

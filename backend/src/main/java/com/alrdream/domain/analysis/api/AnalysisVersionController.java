@@ -6,6 +6,7 @@ import com.alrdream.domain.analysis.api.dto.AnalysisVersionDetail;
 import com.alrdream.domain.analysis.api.dto.AnalysisVersionSummary;
 import com.alrdream.domain.analysis.api.dto.DeleteAnalysisVersionsRequest;
 import com.alrdream.domain.analysis.application.AnalysisVersionService;
+import com.alrdream.domain.document.api.dto.DocumentResponse;
 import com.alrdream.global.error.ErrorResponse;
 import com.alrdream.global.security.MemberPrincipal;
 import io.swagger.v3.oas.annotations.Operation;
@@ -84,6 +85,23 @@ public class AnalysisVersionController {
 			@PathVariable UUID analysisVersionId) {
 		return ResponseEntity.ok(AnalysisVersionDetail.of(
 				analysisVersionService.getOwned(analysisVersionId, planningVersionId, workspaceId, principal.memberId())));
+	}
+
+	@Operation(
+			summary = "분석 PDF 다운로드",
+			description = "[03] §4-6 — 완료된 분석을 PDF로 렌더링해 Supabase Storage에 업로드하고 서명 URL을 반환한다. "
+					+ "이미 생성된 적이 있으면(content는 불변) 다시 렌더링하지 않고 서명 URL만 새로 발급한다.")
+	@ApiResponse(responseCode = "200", description = "발급 성공")
+	@ApiResponse(responseCode = "400", description = "존재하지 않는 분석이거나 아직 생성이 완료되지 않음",
+			content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+	@PostMapping("/{analysisVersionId}/pdf")
+	public ResponseEntity<DocumentResponse> generatePdf(
+			@AuthenticationPrincipal MemberPrincipal principal,
+			@PathVariable UUID workspaceId,
+			@PathVariable UUID planningVersionId,
+			@PathVariable UUID analysisVersionId) {
+		return ResponseEntity.ok(analysisVersionService.generatePdf(
+				analysisVersionId, planningVersionId, workspaceId, principal.memberId()));
 	}
 
 	@Operation(summary = "분석 버전 다중 삭제", description = "[01] 9번 — 소프트 삭제. 지정한 ID 중 하나라도 존재하지 않으면 전체가 실패한다.")

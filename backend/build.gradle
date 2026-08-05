@@ -34,6 +34,7 @@ dependencies {
 	implementation 'org.springframework.boot:spring-boot-starter-flyway'
 	implementation 'org.springframework.boot:spring-boot-starter-validation'
 	implementation 'org.springframework.boot:spring-boot-starter-webmvc'
+	implementation 'org.springframework.boot:spring-boot-starter-thymeleaf'
 	implementation 'org.springframework.boot:spring-boot-starter-actuator'
 	implementation 'org.springframework.boot:spring-boot-starter-security'
 	// 로컬 개발용 자동 재시작(hot reload) — 배포 JAR에는 포함되지 않는다(developmentOnly).
@@ -50,6 +51,10 @@ dependencies {
 	implementation 'com.nimbusds:nimbus-jose-jwt:10.3'
 	// danfickle/openhtmltopdf(com.openhtmltopdf)는 2022년 이후 방치됨 — 활발히 관리되는 포크(io.github.openhtmltopdf) 사용
 	implementation 'io.github.openhtmltopdf:openhtmltopdf-pdfbox:1.1.66'
+	// [03] §4-6 Supabase Storage는 S3 호환 API — AWS SDK v2 S3 클라이언트로 업로드/서명 URL 발급.
+	implementation platform('software.amazon.awssdk:bom:2.29.52')
+	implementation 'software.amazon.awssdk:s3'
+	implementation 'software.amazon.awssdk:url-connection-client'
 	implementation 'io.github.openfeign.querydsl:querydsl-jpa:7.5'
 	annotationProcessor 'io.github.openfeign.querydsl:querydsl-apt:7.5:jpa'
 	compileOnly 'org.projectlombok:lombok'

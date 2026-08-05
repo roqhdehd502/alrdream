@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+	<meta charset="UTF-8" />
+	<title>기획안</title>
+	<style>
+		@page { size: A4; margin: 28mm 20mm; }
+		body { font-family: 'Noto Sans KR', sans-serif; font-size: 10.5pt; line-height: 1.6; color: #222; }
+		h1.doc-title { font-size: 20pt; margin: 0 0 4mm; }
+		p.doc-subtitle { color: #666; margin: 0 0 12mm; font-size: 9.5pt; }
+		h2 { font-size: 13pt; border-bottom: 1.5pt solid #333; padding-bottom: 2mm; margin: 10mm 0 4mm; }
+		h3 { font-size: 11pt; margin: 5mm 0 1.5mm; color: #444; }
+		p { margin: 0 0 3mm; }
+		ul { margin: 0 0 3mm; padding-left: 5mm; }
+		li { margin-bottom: 1.5mm; }
+		table.roadmap { width: 100%; border-collapse: collapse; margin-top: 2mm; table-layout: fixed; }
+		table.roadmap th, table.roadmap td { border: 0.5pt solid #ccc; padding: 2.5mm; text-align: left; vertical-align: top; font-size: 10pt; word-wrap: break-word; }
+		table.roadmap th { background: #f2f2f2; width: 32mm; }
+	</style>
+</head>
+<body>
+	<h1 class="doc-title" th:text="${content.idea_summary.one_line_pitch}">한 줄 아이디어</h1>
+	<p class="doc-subtitle">알려드림 · 기획안 (v<span th:text="${versionNo}">1</span>)</p>
+
+	<h2>1. 아이디어 요약</h2>
+	<p><strong>해결하려는 문제: </strong><span th:text="${content.idea_summary.problem_to_solve}"></span></p>
+	<p><strong>타겟 고객: </strong><span th:text="${content.idea_summary.target_customer}"></span></p>
+	<p><strong>핵심 가치: </strong><span th:text="${content.idea_summary.core_value}"></span></p>
+
+	<h2>2. 문제 정의</h2>
+	<p><strong>어떤 문제인가: </strong><span th:text="${content.problem_definition.what}"></span></p>
+	<p><strong>왜 중요한가: </strong><span th:text="${content.problem_definition.why_important}"></span></p>
+	<p><strong>발생 빈도: </strong><span th:text="${content.problem_definition.frequency}"></span></p>
+
+	<h2>3. 타겟 고객 분석</h2>
+	<p><strong>주요 사용자: </strong><span th:text="${content.target_customer_analysis.main_users}"></span></p>
+	<p><strong>사용자 특징: </strong><span th:text="${content.target_customer_analysis.characteristics}"></span></p>
+	<p><strong>사용 시나리오: </strong><span th:text="${content.target_customer_analysis.usage_scenario}"></span></p>
+
+	<h2>4. 솔루션 제안</h2>
+	<p th:text="${content.solution_proposal.service_overview}"></p>
+	<h3>핵심 기능</h3>
+	<ul>
+		<li th:each="feature : ${content.solution_proposal.core_features}" th:text="${feature}"></li>
+	</ul>
+	<h3>사용자 흐름</h3>
+	<p th:text="${content.solution_proposal.user_flow}"></p>
+
+	<h2>5. 서비스 구조</h2>
+	<p><strong>형태: </strong><span th:text="${content.service_structure.platform_type}"></span></p>
+	<h3>기능 블록</h3>
+	<ul>
+		<li th:each="block : ${content.service_structure.feature_blocks}" th:text="${block}"></li>
+	</ul>
+
+	<h2>6. 경쟁 분석</h2>
+	<p><strong>기존 해결 방법: </strong><span th:text="${content.competitive_analysis.existing_alternatives}"></span></p>
+	<p><strong>경쟁 서비스: </strong><span th:text="${content.competitive_analysis.competitors}"></span></p>
+	<p><strong>차별점: </strong><span th:text="${content.competitive_analysis.differentiation}"></span></p>
+
+	<h2>7. 수익 모델</h2>
+	<p><strong>수익 구조: </strong><span th:text="${content.revenue_model.how_to_earn}"></span></p>
+	<p><strong>현실성: </strong><span th:text="${content.revenue_model.feasibility}"></span></p>
+
+	<h2>8. MVP 전략</h2>
+	<h3>최소 기능</h3>
+	<ul>
+		<li th:each="feature : ${content.mvp_strategy.minimum_features}" th:text="${feature}"></li>
+	</ul>
+	<p><strong>1차 출시 범위: </strong><span th:text="${content.mvp_strategy.launch_scope}"></span></p>
+
+	<h2>9. 실행 로드맵</h2>
+	<table class="roadmap">
+		<tr th:each="step : ${content.execution_roadmap}">
+			<th th:text="${step.stage}">단계</th>
+			<td th:text="${step.actions}">액션</td>
+		</tr>
+	</table>
+
+	<h2>10. 리스크 &amp; 보완 포인트</h2>
+	<p><strong>부족한 점: </strong><span th:text="${content.risks_and_improvements.weaknesses}"></span></p>
+	<p><strong>위험 요소: </strong><span th:text="${content.risks_and_improvements.risks}"></span></p>
+	<p><strong>추가 조사 필요 영역: </strong><span th:text="${content.risks_and_improvements.needs_further_research}"></span></p>
+</body>
+</html>

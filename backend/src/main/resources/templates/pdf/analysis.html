@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+	<meta charset="UTF-8" />
+	<title>분석 결과</title>
+	<style>
+		@page { size: A4; margin: 28mm 20mm; }
+		body { font-family: 'Noto Sans KR', sans-serif; font-size: 10.5pt; line-height: 1.6; color: #222; }
+		h1.doc-title { font-size: 20pt; margin: 0 0 4mm; }
+		p.doc-subtitle { color: #666; margin: 0 0 12mm; font-size: 9.5pt; }
+		h2 { font-size: 13pt; border-bottom: 1.5pt solid #333; padding-bottom: 2mm; margin: 10mm 0 4mm; }
+		p { margin: 0 0 3mm; }
+		.badge-list span { display: inline-block; border: 0.5pt solid #999; border-radius: 3mm; padding: 1mm 3mm; margin: 0 2mm 2mm 0; font-size: 9.5pt; }
+	</style>
+</head>
+<body>
+	<h1 class="doc-title">사업 분석 결과</h1>
+	<p class="doc-subtitle">알려드림 · 분석 (v<span th:text="${versionNo}">1</span>)</p>
+
+	<h2>1. 합법 여부</h2>
+	<p><strong>합법 여부 및 근거: </strong><span th:text="${content.legality.is_legal}"></span></p>
+	<p><strong>유의 사항: </strong><span th:text="${content.legality.considerations}"></span></p>
+	<p><strong>필요 인허가/신고: </strong><span th:text="${content.legality.required_licenses_or_permits}"></span></p>
+
+	<h2>2. 가용 리소스</h2>
+	<p><strong>물적 자원: </strong><span th:text="${content.resource_availability.material_resources}"></span></p>
+	<p><strong>인적 자원: </strong><span th:text="${content.resource_availability.human_resources}"></span></p>
+	<p><strong>종합 평가: </strong><span th:text="${content.resource_availability.overall_feasibility}"></span></p>
+
+	<h2>3. 경쟁 구도</h2>
+	<p><strong>기존 경쟁/대체 서비스: </strong><span th:text="${content.competitive_landscape.existing_competitors}"></span></p>
+	<p><strong>시장 포화도: </strong><span th:text="${content.competitive_landscape.market_saturation}"></span></p>
+	<p><strong>경쟁 우위: </strong><span th:text="${content.competitive_landscape.competitive_advantage}"></span></p>
+
+	<h2>4. 핵심 기능 후보</h2>
+	<p class="badge-list">
+		<span th:each="candidate : ${content.core_feature_candidates}" th:text="${candidate.label}"></span>
+	</p>
+
+	<h2>5. 종합 의견</h2>
+	<p th:text="${content.overall_assessment}"></p>
+</body>
+</html>

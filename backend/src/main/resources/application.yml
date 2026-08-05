@@ -88,6 +88,11 @@ app:
       bucket: ${SUPABASE_STORAGE_BUCKET:}
       access-key: ${SUPABASE_STORAGE_ACCESS_KEY:}
       secret-key: ${SUPABASE_STORAGE_SECRET_KEY:}
+      # SigV4 서명에 필요한 값 — Supabase Storage는 실제 리전 검증 없이 프로젝트 리전과만 맞으면 된다.
+      # SUPABASE_DB_URL의 풀러 호스트(aws-1-ap-northeast-2)로 확인한 프로젝트 리전.
+      region: ${SUPABASE_STORAGE_REGION:ap-northeast-2}
+      # 다운로드 서명 URL 유효 시간.
+      signed-url-ttl-minutes: 15
   portone:
     api-secret: ${PORTONE_API_SECRET:}
     webhook-secret: ${PORTONE_WEBHOOK_SECRET:}

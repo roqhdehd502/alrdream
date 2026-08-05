@@ -353,9 +353,68 @@
 
 ## 작업 항목
 
-- [ ] `content(JSON)` → Thymeleaf 템플릿 렌더링 ([01] 12-4 구조: 아이디어 요약~리스크) [03] §4-6
-- [ ] OpenHTMLtoPDF로 HTML → PDF 변환
-- [ ] Supabase Storage 업로드 + `documents` 레코드 저장, 서명 URL 발급
+- [x] `content(JSON)` → Thymeleaf 템플릿 렌더링 ([01] 12-4 구조: 아이디어 요약~리스크) [03] §4-6
+- [x] OpenHTMLtoPDF로 HTML → PDF 변환
+- [x] Supabase Storage 업로드 + `documents` 레코드 저장, 서명 URL 발급
+
+## 설계 결정
+
+- **세 도메인이 공유하는 단일 진입점**: `DocumentService.getOrGenerate(sourceType, sourceId, templateName,
+  contentJson, extraModel)` 하나를 `PlanningVersionService`/`AnalysisVersionService`/`DesignVersionService`가
+  각자 `POST .../{versionId}/pdf`에서 얇게 호출한다. `AiGenerationJobService`/`UsageQuotaService`와 동일한
+  "공용 진입점 하나" 패턴 — quota 처리를 `AiGenerationJobService.submit()` 안으로 모은 Phase 07 리팩터링과
+  같은 이유(생성 진입점이 여러 곳으로 흩어지면 언젠가 한 곳에서 빠뜨린다).
+- **완료된 버전의 content는 불변 → PDF도 소스당 최초 한 번만 렌더링**: `documents`에 이미 행이 있으면
+  Thymeleaf 렌더링/OpenHTMLtoPDF 변환/S3 업로드를 전부 건너뛰고 저장된 오브젝트 키로 서명 URL만 다시
+  발급한다. 서명 URL은 만료되므로(TTL 15분) `documents.file_url`에는 서명 URL이 아니라 Storage 오브젝트
+  키(`documents/{type}/{id}.pdf`)만 저장하고, 조회 때마다 새로 서명한다.
+- **PDF는 완료(`COMPLETED`) 상태에서만 발급**: `GENERATING`/`FAILED` 상태에서 호출하면 400 — 각 서비스의
+  `generatePdf`가 기존 `getOwned`로 소유권을 확인한 뒤 상태를 확인하는 얕은 래퍼라, Planning/Analysis/Design
+  세 곳 모두 동일한 모양이 됐다.
+- **한글 폰트 임베딩이 필수**: PDFBox 기본(Base14) 폰트는 한글 글리프가 없어 별도 조치 없이는 빈 사각형만
+  나온다. Render 배포 이미지가 `eclipse-temurin-jre-alpine`이라 OS 폰트도 기대할 수 없어, TTF를 애플리케이션
+  리소스로 직접 번들하고 OpenHTMLtoPDF `useFont(...)`로 매 렌더링마다 등록하는 방식을 썼다. 전체 Noto Sans
+  KR(Regular+Bold variable font, 원본 10MB)은 CJK 통합 한자를 모두 포함해 그대로 쓰기엔 과한 크기라,
+  `fonttools`로 wght=400/700 정적 인스턴스를 추출한 뒤 한글 음절(`AC00-D7A3`)/자모/라틴/일반 구두점 범위만
+  서브셋해 `NotoSansKR-{Regular,Bold}.ttf`(각 2.4MB)로 축소했다 — 한자가 필요 없는 이유는 콘텐츠가 전부 AI가
+  생성한 한국어 산출물이기 때문. OFL 1.1 라이선스 원문은 `resources/fonts/OFL.txt`로 함께 보관한다(재배포 시
+  라이선스 동봉 요건).
+- **템플릿 모델**: `content` JSON 문자열을 Jackson 2.x `ObjectMapper`(다른 곳과 동일하게 Jackson 3.x 자동
+  구성 빈과의 충돌을 피하기 위한 독립 인스턴스)로 `Map<String,Object>`로 파싱해 Thymeleaf 컨텍스트의
+  `content` 변수로 넣는다. 스키마가 세 도메인 모두 다르므로(Planning=[01] 12-4 10섹션, Analysis/Design=
+  Phase 08/09에서 새로 설계한 구조) 템플릿도 도메인별로 별도 작성(`templates/pdf/{planning,analysis,
+  design}.html`).
+- **Supabase Storage는 S3 호환 API**: AWS SDK v2(`software.amazon.awssdk:s3`)를 그대로 사용하고
+  `pathStyleAccessEnabled(true)`만 켰다(버킷을 서브도메인이 아닌 경로로 구분). 리전 값은 실제로 검증되지
+  않지만 SigV4 서명에는 필요해, `SUPABASE_DB_URL`의 풀러 호스트(`aws-1-ap-northeast-2`)로 확인한 프로젝트
+  리전(`ap-northeast-2`)을 기본값으로 뒀다.
+
+## 테스트 결과
+
+budget 제약상 실제 유료 Claude 호출은 딱 3번(기획/분석/설계 각 1회, Phase 09 테스트와 동일한 빵집 재고관리
+아이디어로 새 계정을 만들어 처음부터 다시 생성)만 쓰고, PDF 파이프라인 자체(렌더링/업로드/서명 URL)는
+전부 무료라 반복 검증했다.
+
+- **세 도메인 PDF 모두 실제 Supabase Storage에 업로드하고 서명 URL로 내려받아 직접 열어봤다** — `pypdf`로
+  텍스트를 추출하고 `PyMuPDF`로 페이지를 이미지로 렌더링해 육안 확인. 기획 5페이지/분석 3페이지/설계
+  4페이지, 한글이 깨지거나 빈 사각형 없이 정상 출력됨을 확인.
+- **버그 발견 및 수정**: 설계 PDF의 "기능 명세" 표에서 기능명 칼럼에 너비를 지정하지 않아, 표 자동 레이아웃이
+  설명 칼럼에 공간을 몰아주면서 긴 한글 기능명이 글자 하나당 한 줄씩 세로로 쪼개져 렌더링되는 문제를
+  발견했다. `table-layout: fixed`로 바꾸고 기능명 칼럼에 명시적 너비(32mm)를 줘서 해결 — 같은 문제가 잠재해
+  있던 기획 PDF의 로드맵 표에도 동일하게 적용(단계 칼럼 28mm→32mm). 수정 후 재렌더링해 표가 정상적으로
+  줄바꿈됨을 다시 확인.
+- **캐싱 동작 확인**: 같은 버전에 PDF 발급을 두 번 호출했을 때 `generatedAt`이 완전히 동일 — 재렌더링/재업로드
+  없이 서명 URL만 다시 발급됐음을 확인. `documents` 테이블에 소스당 정확히 1행만 있음을 psql로 확인,
+  `file_url`이 서명 URL이 아니라 오브젝트 키로 저장됨을 확인.
+- **[02] §6 컨텍스트 누적이 PDF에도 그대로 반영됨을 재확인**: 설계 설문에서 고른 4개 기능이 PDF의 "1. 기능
+  명세" 표에 정확히 같은 순서로 나타남. 기획 PDF의 "10. 리스크 & 보완 포인트" 섹션에도 설문에서
+  `isUnknown=true`로 답한 두 문항이 "추가 조사 필요 영역"에 반영됨을 확인 — `PromptBuilder`의 unknown
+  처리(Phase 06)가 PDF까지 정상적으로 이어짐.
+- **무료 검증**: `GENERATING` 상태(생성 직후 폴링 전 찰나)에 PDF를 호출하면 400("생성이 완료된 ○○만 PDF로
+  내려받을 수 있습니다"), 존재하지 않는 버전 ID로 호출하면 400("존재하지 않는 ○○입니다"), 인증 없이
+  호출하면 401 — 모두 확인.
+- 테스트 계정/워크스페이스/버전/Job/quota/DB 행을 모두 정리했고, 테스트로 업로드한 Storage 오브젝트 3개도
+  boto3로 직접 삭제해 정리했다. `./gradlew test` 통과.
 
 ---
 

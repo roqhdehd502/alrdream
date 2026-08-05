@@ -2,6 +2,7 @@ package com.alrdream.domain.planning.api;
 
 import com.alrdream.domain.ai.api.dto.AiGenerationJobResponse;
 import com.alrdream.domain.ai.domain.AiGenerationJob;
+import com.alrdream.domain.document.api.dto.DocumentResponse;
 import com.alrdream.domain.planning.api.dto.CreatePlanningVersionRequest;
 import com.alrdream.domain.planning.api.dto.DeletePlanningVersionsRequest;
 import com.alrdream.domain.planning.api.dto.PlanningVersionDetail;
@@ -82,6 +83,21 @@ public class PlanningVersionController {
 			@PathVariable UUID versionId) {
 		return ResponseEntity.ok(
 				PlanningVersionDetail.of(planningVersionService.getOwned(versionId, workspaceId, principal.memberId())));
+	}
+
+	@Operation(
+			summary = "기획안 PDF 다운로드",
+			description = "[03] §4-6 — 완료된 기획안을 PDF로 렌더링해 Supabase Storage에 업로드하고 서명 URL을 반환한다. "
+					+ "이미 생성된 적이 있으면(content는 불변) 다시 렌더링하지 않고 서명 URL만 새로 발급한다.")
+	@ApiResponse(responseCode = "200", description = "발급 성공")
+	@ApiResponse(responseCode = "400", description = "존재하지 않는 기획안이거나 아직 생성이 완료되지 않음",
+			content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+	@PostMapping("/{versionId}/pdf")
+	public ResponseEntity<DocumentResponse> generatePdf(
+			@AuthenticationPrincipal MemberPrincipal principal,
+			@PathVariable UUID workspaceId,
+			@PathVariable UUID versionId) {
+		return ResponseEntity.ok(planningVersionService.generatePdf(versionId, workspaceId, principal.memberId()));
 	}
 
 	@Operation(summary = "기획안 버전 다중 삭제", description = "[01] 6번 — 소프트 삭제. 지정한 ID 중 하나라도 존재하지 않으면 전체가 실패한다.")

@@ -5,6 +5,9 @@ import com.alrdream.domain.ai.domain.AiGenerationJob;
 import com.alrdream.domain.ai.domain.AiTargetType;
 import com.alrdream.domain.analysis.domain.AnalysisVersion;
 import com.alrdream.domain.analysis.domain.AnalysisVersionRepository;
+import com.alrdream.domain.analysis.domain.AnalysisVersionStatus;
+import com.alrdream.domain.document.api.dto.DocumentResponse;
+import com.alrdream.domain.document.application.DocumentService;
 import com.alrdream.domain.planning.application.PlanningVersionService;
 import com.alrdream.domain.planning.domain.PlanningVersion;
 import com.alrdream.domain.planning.domain.PlanningVersionStatus;
@@ -13,6 +16,7 @@ import com.alrdream.infrastructure.ai.AiGenerationRequest;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -29,6 +33,7 @@ public class AnalysisVersionService {
 	private final PlanningVersionService planningVersionService;
 	private final AiGenerationJobService aiGenerationJobService;
 	private final AiClient aiClient;
+	private final DocumentService documentService;
 
 	@PersistenceContext
 	private EntityManager entityManager;
@@ -37,11 +42,13 @@ public class AnalysisVersionService {
 			AnalysisVersionRepository analysisVersionRepository,
 			PlanningVersionService planningVersionService,
 			AiGenerationJobService aiGenerationJobService,
-			AiClient aiClient) {
+			AiClient aiClient,
+			DocumentService documentService) {
 		this.analysisVersionRepository = analysisVersionRepository;
 		this.planningVersionService = planningVersionService;
 		this.aiGenerationJobService = aiGenerationJobService;
 		this.aiClient = aiClient;
+		this.documentService = documentService;
 	}
 
 	/** [01] 7번(최초 생성)과 8번("수정" — 재생성)이 공유하는 단일 진입점. */
@@ -81,6 +88,18 @@ public class AnalysisVersionService {
 		return analysisVersionRepository
 				.findByIdAndPlanningVersionIdAndDeletedAtIsNull(analysisVersionId, planningVersionId)
 				.orElseThrow(() -> new IllegalArgumentException("존재하지 않는 분석입니다."));
+	}
+
+	/** [03] §4-6 — 완료된 분석의 PDF를 조회하거나(이미 생성됨) 새로 생성한다. */
+	@Transactional
+	public DocumentResponse generatePdf(UUID analysisVersionId, UUID planningVersionId, UUID workspaceId, UUID userId) {
+		AnalysisVersion version = getOwned(analysisVersionId, planningVersionId, workspaceId, userId);
+		if (version.getStatus() != AnalysisVersionStatus.COMPLETED) {
+			throw new IllegalArgumentException("생성이 완료된 분석만 PDF로 내려받을 수 있습니다.");
+		}
+		return documentService.getOrGenerate(
+				AiTargetType.ANALYSIS, version.getId(), "pdf/analysis", version.getContent(),
+				Map.of("versionNo", version.getVersionNo()));
 	}
 
 	/** [01] 9번 — 다중 선택 소프트 삭제. */

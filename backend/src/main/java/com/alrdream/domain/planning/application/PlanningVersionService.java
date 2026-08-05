@@ -3,8 +3,11 @@ package com.alrdream.domain.planning.application;
 import com.alrdream.domain.ai.application.AiGenerationJobService;
 import com.alrdream.domain.ai.domain.AiGenerationJob;
 import com.alrdream.domain.ai.domain.AiTargetType;
+import com.alrdream.domain.document.api.dto.DocumentResponse;
+import com.alrdream.domain.document.application.DocumentService;
 import com.alrdream.domain.planning.domain.PlanningVersion;
 import com.alrdream.domain.planning.domain.PlanningVersionRepository;
+import com.alrdream.domain.planning.domain.PlanningVersionStatus;
 import com.alrdream.domain.survey.api.dto.SurveyAnswerDto;
 import com.alrdream.domain.survey.application.SurveyDefinitionService;
 import com.alrdream.domain.survey.application.SurveyResponseService;
@@ -36,6 +39,7 @@ public class PlanningVersionService {
 	private final AiGenerationJobService aiGenerationJobService;
 	private final PromptBuilder promptBuilder;
 	private final AiClient aiClient;
+	private final DocumentService documentService;
 
 	@PersistenceContext
 	private EntityManager entityManager;
@@ -47,7 +51,8 @@ public class PlanningVersionService {
 			SurveyDefinitionService surveyDefinitionService,
 			AiGenerationJobService aiGenerationJobService,
 			PromptBuilder promptBuilder,
-			AiClient aiClient) {
+			AiClient aiClient,
+			DocumentService documentService) {
 		this.planningVersionRepository = planningVersionRepository;
 		this.workspaceService = workspaceService;
 		this.surveyResponseService = surveyResponseService;
@@ -55,6 +60,7 @@ public class PlanningVersionService {
 		this.aiGenerationJobService = aiGenerationJobService;
 		this.promptBuilder = promptBuilder;
 		this.aiClient = aiClient;
+		this.documentService = documentService;
 	}
 
 	/**
@@ -100,6 +106,18 @@ public class PlanningVersionService {
 		workspaceService.getOwned(workspaceId, userId);
 		return planningVersionRepository.findByIdAndWorkspaceIdAndDeletedAtIsNull(versionId, workspaceId)
 				.orElseThrow(() -> new IllegalArgumentException("존재하지 않는 기획안입니다."));
+	}
+
+	/** [03] §4-6 — 완료된 기획안의 PDF를 조회하거나(이미 생성됨) 새로 생성한다. */
+	@Transactional
+	public DocumentResponse generatePdf(UUID versionId, UUID workspaceId, UUID userId) {
+		PlanningVersion version = getOwned(versionId, workspaceId, userId);
+		if (version.getStatus() != PlanningVersionStatus.COMPLETED) {
+			throw new IllegalArgumentException("생성이 완료된 기획안만 PDF로 내려받을 수 있습니다.");
+		}
+		return documentService.getOrGenerate(
+				AiTargetType.PLANNING, version.getId(), "pdf/planning", version.getContent(),
+				Map.of("versionNo", version.getVersionNo()));
 	}
 
 	/** [01] 6번 — 다중 선택 소프트 삭제. */

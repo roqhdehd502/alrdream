@@ -8,6 +8,9 @@ import com.alrdream.domain.analysis.domain.AnalysisVersion;
 import com.alrdream.domain.analysis.domain.AnalysisVersionStatus;
 import com.alrdream.domain.design.domain.DesignVersion;
 import com.alrdream.domain.design.domain.DesignVersionRepository;
+import com.alrdream.domain.design.domain.DesignVersionStatus;
+import com.alrdream.domain.document.api.dto.DocumentResponse;
+import com.alrdream.domain.document.application.DocumentService;
 import com.alrdream.domain.planning.application.PlanningVersionService;
 import com.alrdream.domain.planning.domain.PlanningVersion;
 import com.alrdream.domain.survey.api.dto.SurveyAnswerDto;
@@ -23,6 +26,7 @@ import com.alrdream.infrastructure.ai.PromptBuilder;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -44,6 +48,7 @@ public class DesignVersionService {
 	private final AiGenerationJobService aiGenerationJobService;
 	private final PromptBuilder promptBuilder;
 	private final AiClient aiClient;
+	private final DocumentService documentService;
 
 	@PersistenceContext
 	private EntityManager entityManager;
@@ -56,7 +61,8 @@ public class DesignVersionService {
 			SurveyDefinitionService surveyDefinitionService,
 			AiGenerationJobService aiGenerationJobService,
 			PromptBuilder promptBuilder,
-			AiClient aiClient) {
+			AiClient aiClient,
+			DocumentService documentService) {
 		this.designVersionRepository = designVersionRepository;
 		this.analysisVersionService = analysisVersionService;
 		this.planningVersionService = planningVersionService;
@@ -65,6 +71,7 @@ public class DesignVersionService {
 		this.aiGenerationJobService = aiGenerationJobService;
 		this.promptBuilder = promptBuilder;
 		this.aiClient = aiClient;
+		this.documentService = documentService;
 	}
 
 	/** [01] 10번(최초 생성)과 11번("수정" — 새 DESIGN 설문 응답으로 새 버전 생성)이 공유하는 단일 진입점. */
@@ -125,6 +132,19 @@ public class DesignVersionService {
 		analysisVersionService.getOwned(analysisVersionId, planningVersionId, workspaceId, userId);
 		return designVersionRepository.findByIdAndAnalysisVersionIdAndDeletedAtIsNull(designVersionId, analysisVersionId)
 				.orElseThrow(() -> new IllegalArgumentException("존재하지 않는 설계입니다."));
+	}
+
+	/** [03] §4-6 — 완료된 설계의 PDF를 조회하거나(이미 생성됨) 새로 생성한다. */
+	@Transactional
+	public DocumentResponse generatePdf(
+			UUID designVersionId, UUID analysisVersionId, UUID planningVersionId, UUID workspaceId, UUID userId) {
+		DesignVersion version = getOwned(designVersionId, analysisVersionId, planningVersionId, workspaceId, userId);
+		if (version.getStatus() != DesignVersionStatus.COMPLETED) {
+			throw new IllegalArgumentException("생성이 완료된 설계만 PDF로 내려받을 수 있습니다.");
+		}
+		return documentService.getOrGenerate(
+				AiTargetType.DESIGN, version.getId(), "pdf/design", version.getContent(),
+				Map.of("versionNo", version.getVersionNo()));
 	}
 
 	/** [01] 11번 문맥에 준하는 다중 삭제 — 기획/분석과 동일하게 다중 선택 소프트 삭제를 지원한다. */
