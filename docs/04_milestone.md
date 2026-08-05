@@ -206,9 +206,52 @@
 
 ## 작업 항목
 
-- [ ] 기획 생성 — 설문 응답 기반 AI 생성 [01] 2번
-- [ ] 기획 수정 — 이전 응답 불러와 편집 후 재생성, 버전 기록 [01] 5번
-- [ ] 기획 다중 삭제 (소프트 삭제) [01] 6번
+- [x] 기획 생성 — 설문 응답 기반 AI 생성 [01] 2번
+- [x] 기획 수정 — 이전 응답 불러와 편집 후 재생성, 버전 기록 [01] 5번
+- [x] 기획 다중 삭제 (소프트 삭제) [01] 6번
+
+## 설계 결정
+
+- **"생성"과 "수정"은 같은 엔드포인트**: `POST /api/workspaces/{workspaceId}/planning-versions`가 [01] 2번(최초
+  생성)과 5번("수정")을 모두 처리한다. [02] §7 원칙대로 설문 응답은 불변이라 "수정"은 편집된 답변으로 새
+  설문 응답을 먼저 제출한 뒤(기존 `SurveyController`, Phase 05) 그 응답으로 이 엔드포인트를 다시 호출하는
+  방식 — 별도의 "수정" API가 필요 없다.
+- **응답 형태**: 생성 직후엔 아직 콘텐츠가 없으므로(`GENERATING`), 엔드포인트는 `PlanningVersion`이 아니라
+  `AiGenerationJob`(Phase 06 공용 인프라)을 반환한다. `job.targetId`가 곧 `planningVersionId`라 클라이언트는
+  `GET /api/ai-generation-jobs/{jobId}` 폴링만으로 완료 시점과 대상 ID를 모두 얻는다.
+- **버전 번호 경합 방지**: `survey_definitions` 발행(Phase 05)과 동일한 클래스의 경합 — 같은 워크스페이스에
+  동시 생성 요청이 오면 "다음 버전 번호" 계산이 겹칠 수 있어 `pg_advisory_xact_lock`으로 워크스페이스 단위
+  직렬화했다. 버전 번호는 소프트 삭제 후에도 재사용하지 않는다(삭제 여부와 무관하게 최댓값+1).
+- **DESIGN 설문 응답 차단**: `survey_response`가 참조하는 `survey_definition.survey_key`가 `DESIGN`이면 400 —
+  기획 생성에는 `PLANNING_HAS_IDEA`/`PLANNING_EXPLORING` 응답만 쓸 수 있다.
+- **12-4 구조를 JSON Schema로 그대로 강제**: `PlanningGenerationSpec`에 [01] 12-4의 10개 섹션(아이디어 요약~
+  리스크&보완 포인트)을 각각 `required` 필드를 가진 JSON Schema로 정의하고, 시스템 프롬프트에 12-6의 차별화
+  원칙("사업 시작 가능한 수준", 막연한 요약 금지, 타겟 고객 구체화, MVP 필수 포함 등)을 그대로 반영했다.
+- **Phase 06 리팩터링**: quota 체크(`UsageQuotaService.checkAndIncrement`)를 각 호출부가 아니라
+  `AiGenerationJobService.submit()` 내부로 옮겼다 — 애초 Phase 06 설계 의도("생성 진입점이 이 한 곳뿐이라
+  여기서 공통 처리")대로 되돌린 것으로, Planning이 실제 첫 호출부가 되면서 매번 quota 체크를 잊지 않고 호출해야
+  하는 부담을 없앴다. 이에 따라 Phase 06의 `AiGenerationSmokeTestController` 스파이크 엔드포인트는 삭제했다
+  (원래도 "Phase 07에서 실제 생성 흐름이 만들어지면 삭제 예정"으로 문서화되어 있었음).
+
+## 테스트 결과
+
+시드 테스트 계정(`user@alrdream.test`)으로 실제 Supabase에 대해 검증했다. Claude API 크레딧을 아끼기 위해
+비용이 드는 실제 생성 호출은 1회만 수행하고, 나머지는 AI 호출 전에 막히는 검증 케이스로 채웠다.
+
+- **무료 검증(AI 호출 없이 400 확인)**: DESIGN 설문 응답으로 기획 생성 시도, 존재하지 않는 workspaceId, 다른
+  사용자의 워크스페이스에 대한 생성 시도, 빈 배열로 다중 삭제, 존재하지 않는 버전 ID로 다중 삭제 — 모두 의도한
+  메시지와 함께 400 확인.
+  실행 흐름을 실제 계정으로 end-to-end 검증(설문 응답 제출 → 기획 생성 → Job 폴링 → 상세 조회 → 목록 조회 →
+  다중 삭제 → 삭제 후 재조회) — 전부 정상. 특히:
+  - 답변에 `isUnknown=true`로 표시한 두 문항(경쟁 서비스, 기존 대안)이 실제로 "추가 조사 필요 영역"에
+    반영된 것을 확인 — `PromptBuilder`의 플래그 치환이 프롬프트를 거쳐 최종 콘텐츠에까지 실제로 이어짐.
+  - 생성된 콘텐츠가 [01] 12-4의 10개 섹션을 빠짐없이, 막연하지 않고 구체적으로 채움(타겟 고객·수익 모델·MVP
+    범위·실행 로드맵 모두 설문 응답 맥락을 반영한 실질적인 내용).
+  - DB 직접 조회로 `usage_quotas.generation_count`가 정확히 1만 차감됐음을 확인(Phase 06 리팩터링 전이었다면
+    스파이크 컨트롤러의 이중 호출로 2가 차감됐을 상황).
+  - `planning_versions.content`가 Base64 암호문으로 저장됨을 psql로 직접 확인(평문 아님).
+  - 소프트 삭제 후 목록에서 빠지고 상세 조회는 400으로 막힘을 확인.
+- 이번 phase에서 발견된 버그는 없음(첫 실행에 happy path 포함 전부 정상). 테스트 데이터 정리 완료, `./gradlew test` 통과.
 
 ---
 
