@@ -109,10 +109,26 @@
 
 ## 작업 항목
 
-- [ ] `survey_definitions` CRUD API (Admin 전용, 버전 발행) [02] §3
-- [ ] `survey_responses` 제출/조회 API [02] §4
-- [ ] 설문 정의 기준 answer 유효성 검증 (문항 타입·필수 여부·`allowUnknown` 매칭)
-- [ ] `DESIGN` 설문의 동적 옵션(`core_feature_priority`, 분석 산출물 기반) 주입 로직 [02] §5-3
+- [x] `survey_definitions` 발행/조회 API (Admin 전용) [02] §3 — `POST /api/admin/survey-definitions`, `GET /api/admin/survey-definitions[?surveyKey=]`, `GET /api/admin/survey-definitions/{id}`. **설계 결정**: "CRUD"가 아니라 발행(Create)+조회(Read)만 제공 — [02] §7 "설문 문항이 나중에 바뀌어도 과거 응답을 정확히 재현" 요구사항상 이미 발행된 버전은 절대 수정/삭제하면 안 되고(응답이 그 버전을 FK로 참조), 문항을 고치고 싶으면 새 버전을 발행하는 것만 허용. 버전 번호는 클라이언트가 지정하지 않고 서버가 해당 surveyKey의 최신 버전+1로 자동 계산
+- [x] `survey_responses` 제출/조회 API [02] §4 — `POST /api/workspaces/{workspaceId}/survey-responses`(제출), `GET .../survey-responses`(목록), `GET .../survey-responses/{id}`(상세, 복호화된 답변 포함). 워크스페이스 하위 리소스라 Phase 04와 동일하게 `WorkspaceService.getOwned`로 소유권 검증. `answers`는 `EncryptedStringConverter`(Phase 02에서 미리 만들어두고 임시 엔티티로만 검증했던 것)의 첫 실제 사용처 — DB에 실제로 암호문(Base64)으로 저장되는 것과 복호화 왕복 둘 다 실동작 검증
+- [x] 설문 정의 기준 answer 유효성 검증 — `SurveyAnswerValidator`. 문항 타입 크로스체크·필수 응답 여부·중복/미정의 questionId·allowUnknown 여부·선택형 문항 옵션 값·SCALE 범위(1~5) 전부 검증, 실제 케이스 7개(누락/타입불일치/잘못된 옵션/허용안된 unknown/범위초과/중복/미정의 문항)로 각각 400 확인
+- [x] `DESIGN` 설문의 동적 옵션(`core_feature_priority`, 분석 산출물 기반) 주입 로직 [02] §5-3 — `DesignFeatureOptionResolver` 인터페이스 + 기본 구현 `NoAnalysisDesignFeatureOptionResolver`(항상 빈 목록). **알려진 제약**: 분석 도메인(Phase 08)이 아직 없어 실제 분석 산출물 연동은 못 함 — 메커니즘(옵션 주입 지점, 옵션이 비어있을 때 값 검증을 건너뛰는 처리)만 구현. Phase 08~09에서 분석 도메인이 생기면 이 인터페이스의 실제 구현체로 교체하면 됨
+
+## 부수 변경
+
+- `global/jpa/CreatedOnlyBaseEntity`: `survey_definitions`처럼 `created_at`만 있고 `updated_at`은 없는 테이블(불변 레코드)을 위한 공용 베이스 — `BaseEntity`/`SoftDeleteBaseEntity`와 같은 계열. `survey_responses`는 컬럼명이 `submitted_at`으로 달라 이 베이스를 쓰지 않고 엔티티에 직접 선언
+
+### 기능/비기능 테스트에서 발견해 함께 고친 버그
+
+기능 테스트(정상/경계값/검증 실패 케이스)는 문제없었고, 아래는 비기능 테스트(보안/동시성/강건성) 중 발견한 것들 — 전부 실제로 재현 후 수정, 재테스트로 확정:
+
+- **동시성 — 진짜 race condition**: 같은 surveyKey를 동시에 발행하면("최신 버전+1" 계산 경합) `UNIQUE(survey_key, version)` 위반으로 500 — 10개 동시 발행 요청 중 8개 실패로 실제 재현. Postgres `pg_advisory_xact_lock`(surveyKey별 키, 트랜잭션 종료 시 자동 해제)으로 같은 surveyKey의 발행만 직렬화해 해결 — 10개 동시 요청 재테스트 결과 전부 성공, 버전 4~13 중복/누락 없이 순차 부여 확인
+- **경로 변수 타입 변환 실패가 500** — `MethodArgumentTypeMismatchException`(잘못된 UUID 형식의 workspaceId, enum에 없는 surveyKey) 처리 핸들러가 없었음. `GlobalExceptionHandler`에 추가 — Workspace 도메인 등 프로젝트 전역 엔드포인트에 공통 적용되는 수정
+- **표준 Spring MVC 예외 3종이 전부 500**: 깨진/타입불일치 JSON 바디(`HttpMessageNotReadableException`), 지원 안 하는 HTTP 메서드(`HttpRequestMethodNotSupportedException` → 405), Content-Type 누락/미지원(`HttpMediaTypeNotSupportedException` → 415) — 셋 다 핸들러 추가. Phase 03부터 이어진 "GlobalExceptionHandler가 알려진 예외를 못 잡으면 500"이라는 동일 패턴의 반복이라, 이번엔 표준 Spring MVC 예외 전반을 한 번에 스윕
+- **답변 값 길이 무제한** — `values`(설문 답변 텍스트)에 길이 제한이 전혀 없어 40MB 페이로드도 그대로 암호화·저장까지 통과함(메모리/스토리지 남용 여지). `SurveyAnswerValidator`에 값 1개당 10,000자 상한 추가
+- **MULTI_CHOICE 값 중복 미검증** — 같은 보기를 여러 번 선택해도 통과하던 걸 발견해 중복 검증 추가
+- SQL 인젝션/XSS 스타일 입력(`'; DROP TABLE...`, `<script>...`), 대용량 유니코드/이모지 텍스트는 문제없음 — JPA 파라미터 바인딩 + 순수 JSON API라 별도 이스케이프 불필요, 저장/조회 왕복 정상 확인
+- 인증/인가(401/403), RLS(`survey_definitions`/`survey_responses` 둘 다 `relrowsecurity=t`) 는 이상 없음
 
 ---
 
