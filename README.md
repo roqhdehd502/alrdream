@@ -67,6 +67,20 @@ cp .env.example .env   # 값 채우기 (가이드: .env.example 주석 참고)
 
 `.env`는 `spring.config.import`로 자동 로드되며 git에 커밋되지 않는다. Swagger UI는 `/swagger-ui.html`.
 
+#### 핫 리로드
+
+`spring-boot-devtools`(개발용, 배포 JAR에는 포함되지 않음)가 적용되어 있다. `bootRun`은 계속 떠 있는 블로킹 프로세스라 `--continuous`와 짝이 안 맞으므로, 자동 재컴파일은 별도 터미널에서 돌려야 한다.
+
+```bash
+# 터미널 A
+./gradlew bootRun
+
+# 터미널 B
+./gradlew classes --continuous
+```
+
+코드 저장 → B가 재컴파일 → devtools가 변경된 클래스를 감지해 A의 앱을 자동 재시작(같은 JVM, 1~2초).
+
 ### 3. Frontend (Expo)
 
 ```bash
@@ -109,7 +123,7 @@ npm run dev        # http://localhost:5173
 ./database/scripts/seed-down.sh --yes    # 확인 없이 바로 삭제
 
 # role별 로그인 테스트 계정 삽입/삭제 — ⚠️ 개발/스테이징 전용, 운영 DB에서는 절대 실행 금지
-# (database/seed-test-accounts.sql에 비밀번호 해시가 저장소에 그대로 공개되어 있음)
+# 평문 비밀번호는 저장소에 없음(별도 관리) — 필요하면 담당자에게 문의
 ./database/scripts/seed-test-accounts.sh              # admin@alrdream.test(ADMIN), user@alrdream.test(USER) 삽입
 ./database/scripts/seed-test-accounts-down.sh          # 확인 프롬프트 후 삭제
 ./database/scripts/seed-test-accounts-down.sh --yes    # 확인 없이 바로 삭제
