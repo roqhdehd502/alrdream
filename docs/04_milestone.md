@@ -22,7 +22,7 @@
 - [x] Supabase 프로젝트 생성 (PostgreSQL + Storage)
 - [x] Anthropic Claude API 키 발급
 - [x] Google OAuth Client 등록
-- [x] Apple Developer 계정 및 Sign in with Apple 설정
+- [ ] Apple Developer 계정 및 Sign in with Apple 설정 — **보류(2026-08-06)**: Apple Developer 유료 멤버십 구독 관련 이슈로 자격증명 발급이 막혀있어, 해결 전까지 잠정 보류. 백엔드 코드(`AppleIdTokenVerifierAdapter`)는 이미 구현돼 있고 `APPLE_OAUTH_*` 값만 비어 있는 상태라 크리덴셜이 준비되면 바로 재검증 가능
 - [x] 포트원(PortOne) 가맹점 가입 + 토스페이먼츠(신모듈) PG 채널 연동, 웹훅 시크릿 발급 [03] §4-7
 
 ---
@@ -69,7 +69,7 @@
 
 - [x] Spring Security 6 + JWT(Access/Refresh) 기본 골격 — `global/security`(`JwtTokenProvider`, `JwtAuthenticationFilter`, `SecurityConfig`), stateless. Access 30분/Refresh 14일
 - [x] 자체 회원가입/로그인 (이메일 + 비밀번호) — `domain/member`(`Member`/`MemberRepository`/`AuthService`), BCrypt 해시. `POST /api/auth/signup`, `/login`
-- [x] OAuth2 소셜 로그인 — Google, Apple [03] §4-5. **설계 결정**: Spring Security의 OAuth2Client 리다이렉트 플로우 대신, Frontend(Expo 모바일)가 각 provider SDK로 발급받은 ID 토큰을 백엔드가 검증하는 방식으로 구현(`POST /api/auth/oauth/google`, `/apple`) — 모바일 앱에는 브라우저 리다이렉트보다 이 패턴이 표준적. Google은 `google-api-client`, Apple은 Apple JWKS(`nimbus-jose-jwt`)로 검증. Google은 실제 client-id로 배선 완료, **Apple은 Apple Developer 자격증명이 아직 없어(.env 비어있음) 코드만 구현, 실제 토큰으로 검증 안 됨** — 크리덴셜 채워지면 재검증 필요
+- [x] OAuth2 소셜 로그인 — Google, Apple [03] §4-5. **설계 결정**: Spring Security의 OAuth2Client 리다이렉트 플로우 대신, Frontend(Expo 모바일)가 각 provider SDK로 발급받은 ID 토큰을 백엔드가 검증하는 방식으로 구현(`POST /api/auth/oauth/google`, `/apple`) — 모바일 앱에는 브라우저 리다이렉트보다 이 패턴이 표준적. Google은 `google-api-client`, Apple은 Apple JWKS(`nimbus-jose-jwt`)로 검증. Google은 실제 client-id로 배선 완료, **Apple은 Apple Developer 자격증명이 아직 없어(.env 비어있음) 코드만 구현, 실제 토큰으로 검증 안 됨** — 크리덴셜 채워지면 재검증 필요. **(2026-08-06 추가)** Apple Developer 유료 멤버십 구독 이슈로 당분간 크리덴셜 발급 자체가 불가해 Apple 로그인 기능을 명시적으로 보류하기로 결정. 코드는 Google 경로와 완전히 분리돼 있어(`AuthService`의 provider별 switch 분기, 독립된 `AppleIdTokenVerifierAdapter` 빈, 별도 엔드포인트) 그대로 둬도 무해하며, Google 로그인 동작에는 영향 없음. Frontend(Phase 13)에서는 Apple 로그인 버튼을 당분간 노출하지 않는다. 단, iOS 앱스토어 심사 정책(가이드라인 4.8 — 제3자 소셜 로그인을 제공하면 Sign in with Apple도 필수) 때문에 **Google 로그인을 iOS 빌드에 노출하려면 결국 Apple 로그인도 함께 활성화해야 함** — iOS 앱스토어 제출 전까지는 반드시 해결 필요.
 - [x] `role(USER/ADMIN)` 클레임 기반 인가, Admin API 라우트 분리 — `/api/admin/**`는 `ROLE_ADMIN` 필요. 실제 DB에서 role을 ADMIN으로 바꾼 계정으로 통과(→404, 매핑된 컨트롤러 없음)/USER 계정으로 차단(→403) 둘 다 실동작 검증
 - [x] Refresh Token 저장/무효화 (Redis) — `RefreshTokenStore`, 회원당 활성 세션 1개. Refresh 시 access+refresh 모두 로테이션, 로테이션 전 토큰 재사용 및 로그아웃 후 재사용 전부 거부되는 것까지 검증
 - [x] Swagger(`/swagger-ui.html`) 문서화 — 배포 후 사용자가 각 API에 description이 비어있는 걸 발견해 추가. `global/config/OpenApiConfig`로 API 타이틀/설명 및 JWT Bearer 보안 스킴(`bearerAuth`) 정의, `AuthController`의 모든 엔드포인트에 `@Operation`/`@ApiResponse`, 요청/응답 DTO(`SignupRequest` 등)와 `ErrorResponse`에 `@Schema` 필드 설명 추가. 인증이 필요한 `/logout`, `/me`는 `@SecurityRequirement`로 표시해 Swagger UI의 Authorize 버튼으로 바로 테스트 가능. `/v3/api-docs` 실제 응답으로 summary/description/security/필드 설명이 모두 반영된 것 검증 완료. Phase 01 스파이크용 `PdfSmokeTestController`도 동일하게 문서화
@@ -574,7 +574,7 @@ budget 제약상 실제 유료 Claude 호출은 딱 3번(기획/분석/설계 �
 
 ## 작업 항목
 
-- [ ] 로그인/회원가입 화면 (자체 + Google/Apple)
+- [ ] 로그인/회원가입 화면 (자체 + Google. **Apple은 Apple Developer 자격증명 이슈로 보류 — 크리덴셜 준비되면 버튼 추가**)
 - [ ] 워크스페이스 목록 및 생성 플로우 (분기 선택 → 설문) [03] §3-1
 - [ ] 설문 엔진 — 문항 타입별 공용 컴포넌트 (`SingleChoiceField`/`MultiChoiceField`/`TextField`/`ScaleField`) [03] §3-3
 - [ ] AI 생성 대기 화면 (Job 폴링)
