@@ -56,6 +56,16 @@
 > host/port만 사용)로 회원가입→로그인까지 Redis 연동 정상 동작 재확인 완료. **사용자 측 조치 필요**: 이
 > `render.yaml` 변경사항을 반영해 Render에서 Blueprint를 재동기화(Manual Sync 또는 재배포)해야 `alrdream-redis`
 > 인스턴스가 실제로 생성되고 백엔드에 연결 정보가 주입된다 — 그 전까지는 동일한 에러가 재현된다.)
+>
+> (2026-08-06 추가: 사용자가 Render 대시보드에서 Blueprint를 새로 만들려다, 이 워크스페이스에 등록된 Blueprint
+> 인스턴스가 하나도 없다는 걸 발견 — 즉 실제 배포된 백엔드 서비스(대시보드상 이름 `alrdream`,
+> `alrdream.onrender.com`)는 애초에 `render.yaml` Blueprint로 만들어진 게 아니라 Render 대시보드에서 수동으로
+> (New → Web Service) 만들어진 것이었다. 이 상태에서 `render.yaml`의 서비스 이름이 `alrdream-backend`로
+> 달라(Phase 01 작성 당시엔 실제 배포 이름을 몰라서 임의로 지음) 있어, 그대로 새 Blueprint를 생성하면 Render가
+> 기존 서비스를 인식하지 못하고 `alrdream-backend`라는 별도의 새 서비스를 중복 생성할 위험이 있었다. 나중에 더
+> 꼬이는 걸 막기 위해 `render.yaml`의 서비스 이름을 실제 배포명과 동일한 `alrdream`으로 정정 — 이제 Blueprint를
+> 새로 만들면 이름이 일치해 기존 서비스를 그대로 입양(adopt)할 것으로 예상된다. 실제 Blueprint 생성/입양은
+> 사용자가 Render 대시보드에서 진행 중.)
 
 ## 사전 조건 (사용자 측)
 

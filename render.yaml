@@ -1,5 +1,5 @@
 services:
-  - name: alrdream-backend
+  - name: alrdream
     type: web
     runtime: docker
     plan: free
