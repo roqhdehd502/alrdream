@@ -51,8 +51,9 @@ management:
       show-details: never
   health:
     redis:
-      # Redis는 아직 배포 대상 호스팅이 정해지지 않음(로컬 docker-compose만 존재) — Phase 03에서 재검토
-      enabled: false
+      # Phase 12부터 Render Key Value로 배포(render.yaml) — 로그인/로그아웃이 Redis에 강하게 의존하므로
+      # (RefreshTokenStore) 헬스체크에도 반영해 Redis 장애 시 healthCheckPath가 실제로 unhealthy를 반환하게 한다.
+      enabled: true
 
 # jwt/oauth는 Phase 03에서 실제 코드와 연동 완료. ai/storage/portone은 각 도메인 Phase(06/09/11)에서 연동 예정 —
 # 지금은 [03] 설계 문서에 맞춰 설정 슬롯만 정의해둔다.

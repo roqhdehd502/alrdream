@@ -25,3 +25,28 @@ services:
         sync: false
       - key: SUPABASE_DB_PASSWORD
         sync: false
+      # refresh token 저장소(RefreshTokenStore) — 아래 alrdream-redis Key Value 인스턴스의 내부 host/port를
+      # 자동 주입한다. application.yml이 이미 REDIS_HOST/REDIS_PORT(로컬 기본값 localhost:6379)를 읽으므로
+      # 별도 코드 변경 없이 그대로 동작한다.
+      - key: REDIS_HOST
+        fromService:
+          type: keyvalue
+          name: alrdream-redis
+          property: host
+      - key: REDIS_PORT
+        fromService:
+          type: keyvalue
+          name: alrdream-redis
+          property: port
+
+  # RefreshTokenStore(로그인/로그아웃 시 refresh token 저장) 전용. Free 플랜은 재시작 시 데이터가 날아가는데,
+  # refresh token은 어차피 만료 가능한 세션 데이터라 재로그인만 유도될 뿐 치명적이지 않음 — 초기 단계엔 충분.
+  - type: keyvalue
+    name: alrdream-redis
+    plan: free
+    region: singapore
+    # 모든 키가 TTL과 함께 저장되므로(RefreshTokenStore.save) 메모리 압박 시 TTL 있는 키 중 LRU를 우선
+    # 축출하는 게 noeviction(쓰기 실패로 로그인 자체가 막힘)보다 안전하다.
+    maxmemoryPolicy: volatile-lru
+    # 백엔드와 같은 Render 프라이빗 네트워크에서만 접근하므로 외부 IP 허용은 불필요.
+    ipAllowList: []

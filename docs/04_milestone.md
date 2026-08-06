@@ -42,6 +42,21 @@
 - [x] `admin`: 빈 페이지로 Vite 빌드 → Vercel 배포, 자동 배포 연동 확인 (로컬 빌드는 Phase 00에서 확인됨, 실제 Vercel 배포 성공 여부는 미확인)
 - [x] `frontend`: EAS 프로젝트 초기 설정(`eas.json`), 빈 화면으로 내부 테스트 빌드 1회 성공 확인
 
+> (2026-08-06: Phase 12 완료 후 실제로 Render/Vercel에 배포해 Admin에서 로그인을 시도하자
+> `RedisConnectionFailureException`(`localhost:6379` 연결 거부)으로 500 에러 — `render.yaml`에 Redis(Key
+> Value) 서비스 자체가 없어 `REDIS_HOST`/`REDIS_PORT`가 로컬 기본값(`localhost:6379`)으로 떨어진 게 원인이었다.
+> `docker-compose.yml`엔 로컬 Redis가 있었지만 Phase 01 당시 배포용 Render Key Value 프로비저닝이 누락된 채
+> 넘어간 것 — Redis는 `RefreshTokenStore`(로그인/로그아웃마다 필수 경유)의 유일한 저장소라 로그인 자체가 완전히
+> 막히는 문제였다. `render.yaml`에 `type: keyvalue` 서비스(`alrdream-redis`, free 플랜, `maxmemoryPolicy:
+> volatile-lru` — 모든 키에 TTL이 있어 메모리 압박 시 오래된 세션을 우선 축출하는 게 noeviction의 "로그인
+> 자체가 막히는" 실패보다 안전하다고 판단, `ipAllowList: []`로 내부망 전용)를 추가하고, 백엔드 서비스의
+> `REDIS_HOST`/`REDIS_PORT` 환경변수를 `fromService`로 자동 주입하도록 연결했다(애플리케이션 코드/로컬 `.env`
+> 변경 없음 — 기존에 읽던 프로퍼티 이름 그대로). `management.health.redis.enabled`도 `false`→`true`로 전환해
+> Redis 장애 시 `/actuator/health`가 실제로 unhealthy를 반환하도록 했다. 로컬에서 동일 설정 경로(빈 값 없이
+> host/port만 사용)로 회원가입→로그인까지 Redis 연동 정상 동작 재확인 완료. **사용자 측 조치 필요**: 이
+> `render.yaml` 변경사항을 반영해 Render에서 Blueprint를 재동기화(Manual Sync 또는 재배포)해야 `alrdream-redis`
+> 인스턴스가 실제로 생성되고 백엔드에 연결 정보가 주입된다 — 그 전까지는 동일한 에러가 재현된다.)
+
 ## 사전 조건 (사용자 측)
 
 - [x] Render 가입 + GitHub App을 레포에 연결, `render.yaml` Blueprint 적용 시 `sync: false`로 표시된 환경변수(Supabase DB 접속정보) 대시보드에 직접 입력
