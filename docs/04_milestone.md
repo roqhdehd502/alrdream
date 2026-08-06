@@ -533,6 +533,30 @@ budget 제약상 실제 유료 Claude 호출은 딱 3번(기획/분석/설계 �
   `@RequestHeader`가 필수인데 누락 시 `MissingRequestHeaderException`을 처리하는 핸들러가 없었다.
   `GlobalExceptionHandler`에 핸들러를 추가해 400으로 정상화.
 
+### 추가 검증 — Render 배포 서버 대상 원격 재검증
+
+백엔드를 Render(`https://alrdream.onrender.com`)에 1차 배포하고 동일한 `PORTONE_WEBHOOK_SECRET`을 환경변수로
+등록, PortOne 콘솔의 웹훅 URL도 `https://alrdream.onrender.com/webhooks/portone`로 갱신했다(공개 URL이라
+`localhost` 문제 없이 PortOne이 실제로 도달 가능). 콘솔 "호출 테스트"가 이번엔 응답코드 200을 반환했고,
+이를 재확인하기 위해 로컬 재검증과 동일한 방식(Standard Webhooks 서명을 직접 재구현해 자체 서명한 요청)으로
+배포 서버를 대상으로 전체 경로를 다시 검증했다:
+
+- `GET /actuator/health` → 200, 배포된 서버가 최신 코드임을 헤더 누락 요청의 응답(400, 직전에 고친
+  `MissingRequestHeaderException` 처리)으로 함께 확인.
+- Supabase DB(운영과 동일 인스턴스)에 테스트용 `users`/`subscriptions` 행을 직접 생성(`billing_key`는
+  `DATA_ENCRYPTION_KEY`로 실제 AES-256-GCM 암호화한 값)하고, 그 구독을 가리키는 `paymentId`로 `Transaction.Failed`
+  웹훅을 실제 secret으로 서명해 배포 URL로 전송.
+- 잘못된 서명 → 400, 올바른 서명 → 200, DB 직접 조회로 `payment_history` FAILED 행 기록·
+  `subscriptions.status=PAST_DUE`·`users.plan=FREE` 전환을 확인. 동일 페이로드 재전송 → 200이지만 새 행 없음
+  (멱등 처리도 배포 환경에서 재확인).
+- 테스트로 만든 행 전부 삭제, 정리 확인 완료.
+
+결론: 배포 서버에서 서명 검증부터 DB 반영까지 전체 파이프라인이 로컬과 동일하게 정상 동작한다. 다만 이
+검증도 여전히 자체 서명한 요청을 우리가 직접 전송한 것이라, "PortOne 서버가 실제 결제 이벤트 발생 시
+자기 쪽에서 먼저 요청을 보내는" 진짜 엔드투엔드 전달 자체는 검증 범위 밖이다(콘솔의 200 응답이 이 부분의
+간접 증거이긴 하다). 실제 카드로 결제해 진짜 웹훅이 오는 것까지 확인하려면 브라우저 기반 빌링키 발급
+프론트엔드가 필요해 이번 phase 스코프에서는 다루지 않는다.
+
 ---
 
 # Phase 12: Admin 앱
