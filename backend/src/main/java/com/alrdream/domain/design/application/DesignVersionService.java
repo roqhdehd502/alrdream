@@ -13,6 +13,8 @@ import com.alrdream.domain.document.api.dto.DocumentResponse;
 import com.alrdream.domain.document.application.DocumentService;
 import com.alrdream.domain.planning.application.PlanningVersionService;
 import com.alrdream.domain.planning.domain.PlanningVersion;
+import com.alrdream.domain.prompt.application.PromptTemplateService;
+import com.alrdream.domain.prompt.domain.PromptTemplate;
 import com.alrdream.domain.survey.api.dto.SurveyAnswerDto;
 import com.alrdream.domain.survey.application.SurveyDefinitionService;
 import com.alrdream.domain.survey.application.SurveyResponseService;
@@ -47,6 +49,7 @@ public class DesignVersionService {
 	private final SurveyDefinitionService surveyDefinitionService;
 	private final AiGenerationJobService aiGenerationJobService;
 	private final PromptBuilder promptBuilder;
+	private final PromptTemplateService promptTemplateService;
 	private final AiClient aiClient;
 	private final DocumentService documentService;
 
@@ -61,6 +64,7 @@ public class DesignVersionService {
 			SurveyDefinitionService surveyDefinitionService,
 			AiGenerationJobService aiGenerationJobService,
 			PromptBuilder promptBuilder,
+			PromptTemplateService promptTemplateService,
 			AiClient aiClient,
 			DocumentService documentService) {
 		this.designVersionRepository = designVersionRepository;
@@ -70,6 +74,7 @@ public class DesignVersionService {
 		this.surveyDefinitionService = surveyDefinitionService;
 		this.aiGenerationJobService = aiGenerationJobService;
 		this.promptBuilder = promptBuilder;
+		this.promptTemplateService = promptTemplateService;
 		this.aiClient = aiClient;
 		this.documentService = documentService;
 	}
@@ -176,12 +181,13 @@ public class DesignVersionService {
 					+ "\n[분석 결과]\n" + analysisContent
 					+ "\n\n[설계 설문 응답]\n" + designPromptText;
 
+			PromptTemplate template = promptTemplateService.getActive(AiTargetType.DESIGN);
 			AiGenerationRequest request = new AiGenerationRequest(
-					DesignGenerationSpec.SYSTEM_PROMPT,
+					template.getSystemPrompt(),
 					userPrompt,
-					DesignGenerationSpec.TOOL_NAME,
-					DesignGenerationSpec.TOOL_DESCRIPTION,
-					DesignGenerationSpec.SCHEMA_JSON);
+					template.getToolName(),
+					template.getToolDescription(),
+					template.getSchemaJson());
 			String content = aiClient.generateStructuredJson(request);
 			completeVersion(designVersionId, content);
 		} catch (RuntimeException e) {

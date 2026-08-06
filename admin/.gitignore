@@ -12,6 +12,9 @@ dist
 dist-ssr
 *.local
 
+# 실제 값은 .env에만 (커밋 금지) — 템플릿은 .env.example 참고
+.env
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

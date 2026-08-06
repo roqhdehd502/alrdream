@@ -4,6 +4,8 @@ import com.alrdream.global.error.ErrorResponse;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
+import java.util.List;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.MediaType;
@@ -14,6 +16,9 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.CorsConfigurationSource;
+import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 /**
  * [03] §4-5 — JWT 기반 stateless 인증. {@code /api/admin/**}는 {@code ROLE_ADMIN} 클레임을 가진 요청만 허용해
@@ -33,9 +38,25 @@ public class SecurityConfig {
 		return new BCryptPasswordEncoder();
 	}
 
+	/** Admin(Vite)/Frontend(Expo)가 브라우저에서 이 API를 직접 호출하므로 필요 — [03] §2-2, §3-2. */
+	@Bean
+	public CorsConfigurationSource corsConfigurationSource(
+			@Value("${app.cors.allowed-origins}") List<String> allowedOrigins) {
+		CorsConfiguration configuration = new CorsConfiguration();
+		configuration.setAllowedOrigins(allowedOrigins);
+		configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
+		configuration.setAllowedHeaders(List.of("*"));
+		configuration.setAllowCredentials(true);
+
+		UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+		source.registerCorsConfiguration("/**", configuration);
+		return source;
+	}
+
 	@Bean
 	public SecurityFilterChain securityFilterChain(HttpSecurity http, JwtTokenProvider jwtTokenProvider) throws Exception {
 		http.csrf(csrf -> csrf.disable())
+				.cors(cors -> {})
 				.httpBasic(basic -> basic.disable())
 				.formLogin(form -> form.disable())
 				.sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))

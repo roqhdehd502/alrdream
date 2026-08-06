@@ -10,7 +10,6 @@ import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import java.time.YearMonth;
 import java.util.UUID;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -20,7 +19,7 @@ public class UsageQuotaService {
 
 	private final UsageQuotaRepository usageQuotaRepository;
 	private final MemberRepository memberRepository;
-	private final int freeTierMonthlyLimit;
+	private final FreeTierSettingService freeTierSettingService;
 
 	@PersistenceContext
 	private EntityManager entityManager;
@@ -28,10 +27,10 @@ public class UsageQuotaService {
 	public UsageQuotaService(
 			UsageQuotaRepository usageQuotaRepository,
 			MemberRepository memberRepository,
-			@Value("${app.ai.free-tier-monthly-limit}") int freeTierMonthlyLimit) {
+			FreeTierSettingService freeTierSettingService) {
 		this.usageQuotaRepository = usageQuotaRepository;
 		this.memberRepository = memberRepository;
-		this.freeTierMonthlyLimit = freeTierMonthlyLimit;
+		this.freeTierSettingService = freeTierSettingService;
 	}
 
 	/** PRO 플랜은 무제한([01] 13번 "이후" BM)이라 통과시키고, FREE는 이번 달 quota row를 조회/생성 후 한도를 검사하고 즉시 1 차감한다. */
@@ -53,7 +52,8 @@ public class UsageQuotaService {
 				.getSingleResult();
 
 		UsageQuota quota = usageQuotaRepository.findByUserIdAndPeriod(userId, period)
-				.orElseGet(() -> usageQuotaRepository.save(UsageQuota.create(userId, period, freeTierMonthlyLimit)));
+				.orElseGet(() -> usageQuotaRepository.save(
+						UsageQuota.create(userId, period, freeTierSettingService.get().getMonthlyLimit())));
 
 		if (quota.isExceeded()) {
 			throw new TooManyRequestsException("이번 달 무료 생성 횟수(" + quota.getLimitCount() + "회)를 모두 사용했습니다.");

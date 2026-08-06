@@ -267,7 +267,7 @@
 
 - **"생성"과 "수정"이 완전히 같은 호출**: [03] §4-2대로 분석은 별도 설문 없이 기획안 본문 자체가 입력이라,
   입력이 달라질 여지가 없다 — Planning과 달리 "수정"에 새 사용자 입력조차 없다. 그래서 `POST
-  /api/workspaces/{workspaceId}/planning-versions/{planningVersionId}/analysis-versions`를 반복 호출하는
+/api/workspaces/{workspaceId}/planning-versions/{planningVersionId}/analysis-versions`를 반복 호출하는
   것 자체가 곧 "수정"이다(매번 새 버전 생성). 완료되지 않은(GENERATING) 기획안으로는 분석을 만들 수 없다.
   **분석 콘텐츠 구조는 문서에 명시돼 있지 않아 직접 설계**했다 — [01] 7번이 명시한 3항목(합법여부, 가용
   리소스[물적/인적], 경쟁 서비스)에 더해, [02] §5-3 DESIGN 설문이 필요로 하는
@@ -314,9 +314,9 @@
   [01] 10번과 11번을 모두 처리한다. "수정"은 편집된 답변으로 새 DESIGN 설문 응답을 먼저 제출한 뒤 그 응답으로
   다시 호출하는 방식.
 - **경로 중첩이 도메인 의존 관계 그대로**: `/workspaces/{id}/planning-versions/{id}/analysis-versions/{id}
-  /design-versions` — [03] §4-2의 `design → analysis(특정 버전), survey_response` 참조 관계와 DB FK 체인
+/design-versions` — [03] §4-2의 `design → analysis(특정 버전), survey_response` 참조 관계와 DB FK 체인
   (`design_versions.analysis_version_id → analysis_versions.planning_version_id →
-  planning_versions.workspace_id`)을 그대로 URL로 옮겼다. 4단계 중첩이지만 각 단계의 소유권 검증을 하위
+planning_versions.workspace_id`)을 그대로 URL로 옮겼다. 4단계 중첩이지만 각 단계의 소유권 검증을 하위
   서비스가 상위 서비스의 `getOwned`를 그대로 재사용해 사슬로 연결할 수 있어 구현은 오히려 단순했다
   (`DesignVersionService` → `AnalysisVersionService.getOwned` → 내부적으로 `PlanningVersionService.getOwned`
   → `WorkspaceService.getOwned`).
@@ -360,7 +360,7 @@
 ## 설계 결정
 
 - **세 도메인이 공유하는 단일 진입점**: `DocumentService.getOrGenerate(sourceType, sourceId, templateName,
-  contentJson, extraModel)` 하나를 `PlanningVersionService`/`AnalysisVersionService`/`DesignVersionService`가
+contentJson, extraModel)` 하나를 `PlanningVersionService`/`AnalysisVersionService`/`DesignVersionService`가
   각자 `POST .../{versionId}/pdf`에서 얇게 호출한다. `AiGenerationJobService`/`UsageQuotaService`와 동일한
   "공용 진입점 하나" 패턴 — quota 처리를 `AiGenerationJobService.submit()` 안으로 모은 Phase 07 리팩터링과
   같은 이유(생성 진입점이 여러 곳으로 흩어지면 언젠가 한 곳에서 빠뜨린다).
@@ -383,7 +383,7 @@
   구성 빈과의 충돌을 피하기 위한 독립 인스턴스)로 `Map<String,Object>`로 파싱해 Thymeleaf 컨텍스트의
   `content` 변수로 넣는다. 스키마가 세 도메인 모두 다르므로(Planning=[01] 12-4 10섹션, Analysis/Design=
   Phase 08/09에서 새로 설계한 구조) 템플릿도 도메인별로 별도 작성(`templates/pdf/{planning,analysis,
-  design}.html`).
+design}.html`).
 - **Supabase Storage는 S3 호환 API**: AWS SDK v2(`software.amazon.awssdk:s3`)를 그대로 사용하고
   `pathStyleAccessEnabled(true)`만 켰다(버킷을 서브도메인이 아닌 경로로 구분). 리전 값은 실제로 검증되지
   않지만 SigV4 서명에는 필요해, `SUPABASE_DB_URL`의 풀러 호스트(`aws-1-ap-northeast-2`)로 확인한 프로젝트
@@ -525,6 +525,7 @@ budget 제약상 실제 유료 Claude 호출은 딱 3번(기획/분석/설계 �
 공개 URL로 재확인 필요).
 
 대신 발급된 실제 secret으로 Standard Webhooks 서명을 직접 재구현해 로컬에서 재검증했다:
+
 - 잘못된 secret으로 서명 → `WebhookVerificationException`("No matching signature found")으로 정상 거절 확인
   (이전엔 secret이 비어 있어 "Empty key" 예외였던 것과 구분됨 — 실제 secret이 로드됐다는 증거).
 - 실제 secret으로 올바르게 서명한 `Transaction.Failed` 웹훅 → `payment_history`에 FAILED 행 기록,
@@ -563,10 +564,102 @@ budget 제약상 실제 유료 Claude 호출은 딱 3번(기획/분석/설계 �
 
 ## 작업 항목
 
-- [ ] 설문 정의 관리 화면 — 목록/에디터/버전 발행/미리보기 [03] §2
-- [ ] 사용자/워크스페이스 조회 화면 (CS 대응용)
-- [ ] AI 프롬프트 템플릿 관리 화면
-- [ ] 구독/사용량 대시보드
+- [x] 구현시 데스크톱 / 랩톱 / 태블릿 / 모바일 반응형 화면 대응
+- [x] 설문 정의 관리 화면 — 목록/에디터/버전 발행/미리보기 [03] §2
+- [x] 사용자/워크스페이스 조회 화면 (CS 대응용)
+- [x] AI 프롬프트 템플릿 관리 화면
+- [x] 구독/사용량 대시보드
+
+## 설계 결정
+
+- **AI 프롬프트 템플릿을 DB로 이관(신규 `prompt_templates` 테이블)**: 착수 전 확인해보니 기획/분석/설계 생성에
+  쓰이는 시스템 프롬프트·Claude Tool Use 스키마가 `PlanningGenerationSpec` 등 Java 코드에 하드코딩돼 있어
+  "Admin에서 편집"이 애초에 불가능했다. `survey_definitions`와 동일한 패턴(불변 버전 관리 — 발행하면 새
+  버전이 생기고 기존 버전은 절대 수정되지 않음, 최신 버전 = 활성 버전)으로 DB로 옮겼다. 마이그레이션(V5)이
+  기존 하드코딩 값을 각 타입(PLANNING/ANALYSIS/DESIGN)의 버전 1로 그대로 이관해, 이번 phase 배포 이후에도
+  생성 결과가 바뀌지 않는다. `PlanningVersionService`/`AnalysisVersionService`/`DesignVersionService`는
+  이제 `PromptTemplateService.getActive(promptType)`로 최신 버전을 조회해 쓴다 — 3개의 `*GenerationSpec`
+  클래스는 삭제.
+- **`prompt_templates.prompt_type`은 새 enum을 만들지 않고 기존 `AiTargetType`(PLANNING/ANALYSIS/DESIGN)을
+  재사용**: 이미 `ai_generation_jobs.target_type`에 정확히 같은 3개 값의 enum이 있어 중복 정의를 피했다.
+- **FREE 티어 월별 생성 한도도 DB로 이관(신규 `free_tier_settings` 단일 행 테이블)**: 이전에는
+  `app.ai.free-tier-monthly-limit`(application.yml 고정값 5)이었다 — "Free 티어 생성 횟수 한도 조정"([01]
+  13번 BM, [03] §2-1)을 Admin에서 하려면 재배포 없이 값을 바꿀 수 있어야 하므로 DB 단일 행으로 옮기고
+  `UsageQuotaService`가 매번 이 값을 조회하도록 변경. 사용자별 개별 한도 조정 기능은 이번 요구사항에 없어
+  구현하지 않음(전역 기본값만 조정 가능).
+- **사용자/워크스페이스 조회는 CS 목적 한정 — 수정/삭제 API를 만들지 않음**: [03] §2-1 설계에 "상태 확인,
+  수정/삭제 등 직접 개입은 최소화"라고 명시돼 있어 그대로 따름. `GET /api/admin/users`(이메일 검색),
+  `GET /api/admin/users/{id}`, `GET /api/admin/users/{id}/workspaces`만 제공.
+- **구독 대시보드는 상태별 요약(`GET .../summary`) + 목록/필터만 제공**: `subscriptions.plan` 컬럼은 실제로
+  항상 `PRO`(FREE 사용자는 애초에 구독 행 자체가 없음)라 plan 필터는 의미가 없어 만들지 않고, `status`
+  필터만 지원.
+- **CORS 설정 신규 추가**: 이전까지 백엔드를 호출하는 클라이언트가 없어(Postman/curl뿐) CORS 설정이 아예
+  없었다 — 브라우저에서 Admin이 직접 API를 호출하는 이번 phase에서 처음 필요해졌다.
+  `app.cors.allowed-origins`(env로 배포 도메인 추가 가능, 로컬 기본값은 Admin/Frontend 개발 서버 포트)로
+  구성한 `CorsConfigurationSource` 빈을 `SecurityConfig`에 추가.
+- **Admin 프론트는 React Query 등 데이터 레이어 없이 순수 `fetch` + hook으로 구성**: 화면 수·상호작용이
+  단순해(대부분 목록 조회 + 폼 하나) 캐싱/재검증 라이브러리가 필요한 규모가 아니라고 판단, `react-router-dom`
+  외에는 추가 런타임 의존성을 넣지 않았다. Access token은 `localStorage`에 저장하고, 401을 받으면
+  refresh token으로 자동 갱신 후 원 요청을 재시도하는 로직을 `apiFetch` 안에 뒀다(refresh token은 회전형이라
+  동시에 여러 401이 터져도 하나의 refresh 요청만 공유하도록 처리).
+- **로그인 시 `role !== ADMIN`이면 즉시 토큰을 버리고 거부**: 백엔드가 `/api/admin/**`를
+  `hasRole("ADMIN")`으로 이미 막고 있지만, 일반 회원이 실수로 Admin 콘솔에 로그인했을 때 "로그인은 됐는데
+  모든 화면에서 403만 뜨는" 혼란스러운 상태 대신 로그인 단계에서 바로 명확한 에러를 보여주기 위함.
+
+## 테스트 결과
+
+- **마이그레이션(V5) 문제 및 수정**: 처음 작성한 마이그레이션이 Flyway 부팅 시 파싱 에러로 실패했다 —
+  JSON Schema 리터럴을 담은 PostgreSQL dollar-quote 태그(`$SCHEMA_PLANNING$`) 바로 뒤에 JSON의 여는 중괄호
+  `{`가 와서 `...$SCHEMA_PLANNING${`처럼 우연히 Flyway 플레이스홀더 문법(`${`)과 겹쳐, "No value provided for
+  placeholder" 에러로 마이그레이션 자체가 파싱 실패했다. 이 프로젝트는 플레이스홀더 치환 기능을 쓸 계획이
+  없어 `spring.flyway.placeholder-replacement: false`로 아예 꺼서 근본적으로 해결(개별 SQL을 고치는 대신,
+  향후 비슷한 JSON 리터럴이 마이그레이션에 또 들어올 가능성을 감안).
+- **`./gradlew test`(Testcontainers 부팅 테스트)**: 위 수정 후 통과 확인 — V5 마이그레이션이 실제 Postgres
+  컨테이너에 정상 적용되고 전체 Spring 컨텍스트(새 Bean 포함)가 문제없이 뜬다.
+- **실제 Supabase(운영과 동일 DB)에 대상으로 로컬 서버 기동 후 전체 신규 Admin API를 실제 호출로 검증**:
+  - V5 마이그레이션이 실제 Supabase에도 정상 적용됨(`Successfully applied 1 migration ... now at version v5`).
+  - 회원가입 후 DB에서 직접 `role='ADMIN'`으로 승격 → 재로그인해 실제 ADMIN 클레임이 담긴 JWT로 전체
+    엔드포인트 호출: 프롬프트 템플릿 목록/발행(새 버전 생성 후 최신 버전으로 정상 반영 확인, 이후 테스트로
+    남긴 버전은 원본 v1 내용을 다시 새 버전으로 발행해 활성 버전을 원상 복구 — `prompt_templates`는
+    survey_definitions처럼 불변이라 행 자체를 지우지 않음), FREE 한도 조회/변경/원복, 사용자 목록/검색/상세,
+    사용자별 워크스페이스 조회, 구독 목록/요약 — 전부 200/정상 데이터 확인.
+  - **보안 회귀 확인**: 일반 `USER` role 토큰으로 `/api/admin/users` 호출 시 403, 토큰 없이 호출 시 401 —
+    기존 `hasRole("ADMIN")` 게이트가 새 엔드포인트에도 그대로 적용됨을 확인.
+  - **기존 기능 회귀 확인**: `SurveyDefinitionAdminController`(Phase 05부터 존재)가 이번 리팩토링/CORS
+    변경 이후에도 그대로 동작함을 재확인.
+  - 테스트로 만든 사용자 계정(admin/non-admin) 삭제, `./gradlew test` 재통과 확인.
+- **Admin 프론트 정적 검증**: `tsc -b`, `vite build`, `oxlint` 모두 통과(경고 1건 — AuthContext가 컴포넌트와
+  훅을 한 파일에서 같이 export해 Fast Refresh 관련 경고, React Context의 흔한 패턴이라 무해). 로컬에서
+  Admin 개발 서버(`:5173`)와 백엔드(`:8080`)를 동시에 띄운 뒤 실제 브라우저 preflight/실 요청 CORS 헤더가
+  정상 반환되는 것까지 curl로 확인했다.
+- **Playwright MCP를 통한 실제 브라우저 E2E 테스트** (위 "한계"로 남겼던 항목을 이후 세션에서 해소):
+  로컬 백엔드(`:8080`)/Admin(`:5173`)을 띄운 뒤, 신규 가입 후 DB에서 `role='ADMIN'`으로 승격한 테스트
+  계정으로 실제 Chromium 브라우저를 띄워 화면을 직접 조작하며 검증했다.
+  - **로그인**: 정상 로그인 → `/dashboard` 리다이렉트 확인. 잘못된 비밀번호 입력 시 에러 배너
+    ("이메일 또는 비밀번호가 올바르지 않습니다.") 정상 표시 확인.
+  - **설문 정의 관리**: 탭 전환, 발행 이력 목록, 문항 미리보기(10개 문항·선택지·필수/모름허용 배지까지
+    전부 렌더링) 확인. "+ 새 버전 발행" 클릭 시 최신 버전 내용이 편집 폼에 정확히 프리필되는 것까지 확인
+    (실제 발행은 하지 않음 — 이 테이블의 최신 버전은 실사용자 온보딩 설문에 즉시 반영되는 라이브 데이터라,
+    테스트용 더미 내용으로 새 버전을 만들면 불변 버전 이력에 영구히 남는 문제가 있어 프리필 검증 후 취소).
+  - **AI 프롬프트 템플릿 관리**: 기획/분석/설계 탭 전환, 상세 보기(시스템 프롬프트·JSON Schema pretty-print)
+    확인. 발행 플로우 자체는 이전 세션에서 실제 API 호출로 이미 검증됐으므로(위 항목 참고) 여기서는 재발행하지
+    않고 조회 경로만 확인.
+  - **사용자 조회**: 이메일 검색 필터링, 상세 페이지(가입 경로/권한/요금제/가입일), 워크스페이스 목록
+    빈 상태 확인(현재 실사용 워크스페이스가 없어 목록이 채워진 상태의 렌더링은 미검증 — 다만 다른 페이지의
+    동일한 테이블 렌더링 경로가 이미 검증되어 있어 위험도는 낮음).
+  - **구독/사용량 대시보드**: FREE 플랜 월별 한도를 실제로 변경(5→7) → 저장 성공 메시지와 값 반영 확인 →
+    원래 값(5)으로 복구. 상태 필터 드롭다운 동작 확인.
+  - **반응형 레이아웃(모바일 390px 너비)**: 사이드바가 오프캔버스 드로어로 전환되고 햄버거 버튼으로
+    열고 닫히는 것, 표는 페이지 자체가 아니라 표 컨테이너 내부에서만 가로 스크롤되는 것, 설문/프롬프트
+    편집 폼의 2단 그리드가 1단으로 정상적으로 쌓이는 것, 로그인 카드가 좁은 화면에서도 깨지지 않는 것을
+    확인. (사이드바 바깥 어두운 배경을 탭해 닫는 상호작용은 코드상 정상이나 — `<div className="sidebar-backdrop">`
+    가 `onClick`으로 닫기를 호출하고 z-index도 사이드바보다 낮게 올바르게 설정돼 있음 — 390px 너비에서는
+    사이드바 폭(232px)이 화면의 절반 이상을 차지해 자동화 도구로 배경 클릭을 검증하기 애매했음. 내비게이션
+    링크 클릭 시 자동으로 닫히는 별도 경로는 실기기 조작과 동일하게 확인됨)
+  - **개선**: 브라우저 콘솔에서 비밀번호 입력란에 `autocomplete` 속성이 없다는 안내가 있어, 이메일/비밀번호
+    input에 `autoComplete="username"`/`"current-password"`를 추가했다(비밀번호 관리자 연동 개선, 기능 변경
+    없음). 추가 후 `tsc -b` 재통과 확인.
+  - **테스트 후 정리**: 이번 검증용으로 만든 `e2e-admin@alrdream.test` 계정은 테스트 종료 후 DB에서 삭제했다.
 
 ---
 
@@ -574,6 +667,7 @@ budget 제약상 실제 유료 Claude 호출은 딱 3번(기획/분석/설계 �
 
 ## 작업 항목
 
+- [ ] 구현시 데스크톱 / 랩톱 / 태블릿 / 모바일 반응형 화면 대응
 - [ ] 로그인/회원가입 화면 (자체 + Google. **Apple은 Apple Developer 자격증명 이슈로 보류 — 크리덴셜 준비되면 버튼 추가**)
 - [ ] 워크스페이스 목록 및 생성 플로우 (분기 선택 → 설문) [03] §3-1
 - [ ] 설문 엔진 — 문항 타입별 공용 컴포넌트 (`SingleChoiceField`/`MultiChoiceField`/`TextField`/`ScaleField`) [03] §3-3

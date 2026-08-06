@@ -8,6 +8,8 @@ import com.alrdream.domain.document.application.DocumentService;
 import com.alrdream.domain.planning.domain.PlanningVersion;
 import com.alrdream.domain.planning.domain.PlanningVersionRepository;
 import com.alrdream.domain.planning.domain.PlanningVersionStatus;
+import com.alrdream.domain.prompt.application.PromptTemplateService;
+import com.alrdream.domain.prompt.domain.PromptTemplate;
 import com.alrdream.domain.survey.api.dto.SurveyAnswerDto;
 import com.alrdream.domain.survey.application.SurveyDefinitionService;
 import com.alrdream.domain.survey.application.SurveyResponseService;
@@ -38,6 +40,7 @@ public class PlanningVersionService {
 	private final SurveyDefinitionService surveyDefinitionService;
 	private final AiGenerationJobService aiGenerationJobService;
 	private final PromptBuilder promptBuilder;
+	private final PromptTemplateService promptTemplateService;
 	private final AiClient aiClient;
 	private final DocumentService documentService;
 
@@ -51,6 +54,7 @@ public class PlanningVersionService {
 			SurveyDefinitionService surveyDefinitionService,
 			AiGenerationJobService aiGenerationJobService,
 			PromptBuilder promptBuilder,
+			PromptTemplateService promptTemplateService,
 			AiClient aiClient,
 			DocumentService documentService) {
 		this.planningVersionRepository = planningVersionRepository;
@@ -59,6 +63,7 @@ public class PlanningVersionService {
 		this.surveyDefinitionService = surveyDefinitionService;
 		this.aiGenerationJobService = aiGenerationJobService;
 		this.promptBuilder = promptBuilder;
+		this.promptTemplateService = promptTemplateService;
 		this.aiClient = aiClient;
 		this.documentService = documentService;
 	}
@@ -139,12 +144,13 @@ public class PlanningVersionService {
 		try {
 			Map<String, String> variables = promptBuilder.toPromptVariables(schema, answers);
 			String userPrompt = promptBuilder.renderAsText(variables);
+			PromptTemplate template = promptTemplateService.getActive(AiTargetType.PLANNING);
 			AiGenerationRequest request = new AiGenerationRequest(
-					PlanningGenerationSpec.SYSTEM_PROMPT,
+					template.getSystemPrompt(),
 					userPrompt,
-					PlanningGenerationSpec.TOOL_NAME,
-					PlanningGenerationSpec.TOOL_DESCRIPTION,
-					PlanningGenerationSpec.SCHEMA_JSON);
+					template.getToolName(),
+					template.getToolDescription(),
+					template.getSchemaJson());
 			String content = aiClient.generateStructuredJson(request);
 			completeVersion(planningVersionId, content);
 		} catch (RuntimeException e) {

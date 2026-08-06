@@ -11,6 +11,8 @@ import com.alrdream.domain.document.application.DocumentService;
 import com.alrdream.domain.planning.application.PlanningVersionService;
 import com.alrdream.domain.planning.domain.PlanningVersion;
 import com.alrdream.domain.planning.domain.PlanningVersionStatus;
+import com.alrdream.domain.prompt.application.PromptTemplateService;
+import com.alrdream.domain.prompt.domain.PromptTemplate;
 import com.alrdream.infrastructure.ai.AiClient;
 import com.alrdream.infrastructure.ai.AiGenerationRequest;
 import jakarta.persistence.EntityManager;
@@ -32,6 +34,7 @@ public class AnalysisVersionService {
 	private final AnalysisVersionRepository analysisVersionRepository;
 	private final PlanningVersionService planningVersionService;
 	private final AiGenerationJobService aiGenerationJobService;
+	private final PromptTemplateService promptTemplateService;
 	private final AiClient aiClient;
 	private final DocumentService documentService;
 
@@ -42,11 +45,13 @@ public class AnalysisVersionService {
 			AnalysisVersionRepository analysisVersionRepository,
 			PlanningVersionService planningVersionService,
 			AiGenerationJobService aiGenerationJobService,
+			PromptTemplateService promptTemplateService,
 			AiClient aiClient,
 			DocumentService documentService) {
 		this.analysisVersionRepository = analysisVersionRepository;
 		this.planningVersionService = planningVersionService;
 		this.aiGenerationJobService = aiGenerationJobService;
+		this.promptTemplateService = promptTemplateService;
 		this.aiClient = aiClient;
 		this.documentService = documentService;
 	}
@@ -118,12 +123,13 @@ public class AnalysisVersionService {
 	// PlanningVersionService.generate와 동일한 이유로 리포지토리 호출 자체의 트랜잭션 경계에 완료/실패 반영을 맡긴다.
 	private void generate(UUID analysisVersionId, String planningContentJson) {
 		try {
+			PromptTemplate template = promptTemplateService.getActive(AiTargetType.ANALYSIS);
 			AiGenerationRequest request = new AiGenerationRequest(
-					AnalysisGenerationSpec.SYSTEM_PROMPT,
+					template.getSystemPrompt(),
 					planningContentJson,
-					AnalysisGenerationSpec.TOOL_NAME,
-					AnalysisGenerationSpec.TOOL_DESCRIPTION,
-					AnalysisGenerationSpec.SCHEMA_JSON);
+					template.getToolName(),
+					template.getToolDescription(),
+					template.getSchemaJson());
 			String content = aiClient.generateStructuredJson(request);
 			completeVersion(analysisVersionId, content);
 		} catch (RuntimeException e) {
