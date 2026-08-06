@@ -95,6 +95,9 @@ app:
       signed-url-ttl-minutes: 15
   portone:
     api-secret: ${PORTONE_API_SECRET:}
+    api-base: https://api.portone.io
     webhook-secret: ${PORTONE_WEBHOOK_SECRET:}
     store-id: ${PORTONE_STORE_ID:}
     channel-key: ${PORTONE_CHANNEL_KEY:}
+    # [01] 13번 "이후" BM — Pro 구독 월 요금. 문서에 금액이 명시돼 있지 않아 임의로 정한 값.
+    pro-monthly-price-krw: 9900

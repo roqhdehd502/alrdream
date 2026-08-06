@@ -48,7 +48,10 @@ public class SecurityConfig {
 								"/actuator/health",
 								"/swagger-ui/**",
 								"/swagger-ui.html",
-								"/v3/api-docs/**")
+								"/v3/api-docs/**",
+								// PortOne은 우리 JWT를 발급받을 수 없다 — 대신 Standard Webhooks 서명(HMAC)으로
+								// 검증한다(PortOneWebhookController).
+								"/webhooks/portone")
 						.permitAll()
 						.requestMatchers("/api/admin/**").hasRole("ADMIN")
 						.anyRequest().authenticated())

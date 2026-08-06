@@ -63,4 +63,9 @@ public class Member extends BaseEntity {
 	public static Member createOAuth(String email, AuthProvider provider, String providerId) {
 		return new Member(email, null, provider, providerId);
 	}
+
+	/** [03] §4-7 — 구독 결제 성공/실패 웹훅에 따라 Pro 권한을 반영한다. */
+	public void changePlan(MemberPlan plan) {
+		this.plan = plan;
+	}
 }

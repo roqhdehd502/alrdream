@@ -9,6 +9,7 @@ import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.HttpMediaTypeNotSupportedException;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.MissingRequestHeaderException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
@@ -38,6 +39,14 @@ public class GlobalExceptionHandler {
 	public ResponseEntity<ErrorResponse> handleTypeMismatch(MethodArgumentTypeMismatchException e) {
 		String message = e.getName() + " 값이 올바르지 않습니다: " + e.getValue();
 		return ResponseEntity.badRequest().body(new ErrorResponse("BAD_REQUEST", message));
+	}
+
+	// PortOneWebhookController처럼 @RequestHeader가 필수인데 헤더가 누락된 경우 — 처리 안 하면 500(PortOne이
+	// 형식이 다른 테스트 호출을 보내는 경우 등).
+	@ExceptionHandler(MissingRequestHeaderException.class)
+	public ResponseEntity<ErrorResponse> handleMissingHeader(MissingRequestHeaderException e) {
+		return ResponseEntity.badRequest()
+				.body(new ErrorResponse("BAD_REQUEST", "필수 헤더가 누락되었습니다: " + e.getHeaderName()));
 	}
 
 	// 매핑된 컨트롤러가 없는 경로 — catch-all Exception 핸들러가 가로채 500으로 뭉개기 전에 먼저 처리해 404를 유지한다.

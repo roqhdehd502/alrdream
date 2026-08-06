@@ -55,6 +55,8 @@ dependencies {
 	implementation platform('software.amazon.awssdk:bom:2.29.52')
 	implementation 'software.amazon.awssdk:s3'
 	implementation 'software.amazon.awssdk:url-connection-client'
+	// [03] §4-7 PortOne V2 JVM Server SDK — 빌링키 결제/예약결제 API 호출 및 Standard Webhooks 서명 검증.
+	implementation 'io.portone:server-sdk:0.24.0'
 	implementation 'io.github.openfeign.querydsl:querydsl-jpa:7.5'
 	annotationProcessor 'io.github.openfeign.querydsl:querydsl-apt:7.5:jpa'
 	compileOnly 'org.projectlombok:lombok'

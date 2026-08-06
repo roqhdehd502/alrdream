@@ -422,11 +422,116 @@ budget 제약상 실제 유료 Claude 호출은 딱 3번(기획/분석/설계 �
 
 ## 작업 항목
 
-- [ ] PortOne 빌링키 발급 연동 — Frontend/Admin SDK(`requestIssueBillingKey`) → 백엔드 `billingKeyId` 수신/암호화 저장 [03] §4-7
-- [ ] 최초 결제 요청 + 다음 달 결제 예약(`timeToPay`) API
-- [ ] `POST /webhooks/portone` — Standard Webhooks 서명 검증(JVM SDK), `payment_id` 기준 멱등 처리
-- [ ] 웹훅 이벤트 처리 — `Transaction.Paid`(결제 이력 저장 + 다음 결제 재예약), `Transaction.Failed`(`status=PAST_DUE` 전환)
-- [ ] Pro 구독 권한 반영 — 무제한 생성, 고급 분석, 설계 문서 export
+- [x] PortOne 빌링키 발급 연동 — Frontend/Admin SDK(`requestIssueBillingKey`) → 백엔드 `billingKeyId` 수신/암호화 저장 [03] §4-7
+- [x] 최초 결제 요청 + 다음 달 결제 예약(`timeToPay`) API
+- [x] `POST /webhooks/portone` — Standard Webhooks 서명 검증(JVM SDK), `payment_id` 기준 멱등 처리
+- [x] 웹훅 이벤트 처리 — `Transaction.Paid`(결제 이력 저장 + 다음 결제 재예약), `Transaction.Failed`(`status=PAST_DUE` 전환)
+- [x] Pro 구독 권한 반영 — 무제한 생성
+
+## 설계 결정
+
+- **PortOne JVM Server SDK 좌표**: 문서에 정확한 Maven 좌표가 없어 `portone-io/server-sdk` 저장소를 직접
+  확인(Maven Central 메타데이터, `jvm/lib/src/generated` 소스)해 `io.portone:server-sdk:0.24.0`을 확정했다.
+  Kotlin으로 구현돼 있지만 각 API마다 `@JvmName`으로 Java 친화적인 `CompletableFuture` 오버로드(예:
+  `payWithBillingKeyFuture` → Java에서는 `payWithBillingKey`)를 함께 제공해 순수 Java 코드에서 그대로 쓸 수
+  있었다. 단, SDK의 모든 예외(`PortOneException`)가 Kotlin에서는 checked exception이 아니지만 Java 관점에서는
+  `Exception`을 상속한 **checked** 예외라, `WebhookVerifier.verify()`(동기 메서드)를 감싸는 쪽은
+  `throws WebhookVerificationException`을 명시해야 했다(`CompletableFuture` 경로는 `.join()`이
+  `CompletionException`으로 감싸 unchecked라 문제없음).
+- **`WebhookVerifier`는 빈으로 만들지 않는다**: 생성자가 secret을 즉시 base64 디코딩해 검증하므로, 아직 웹훅
+  secret을 발급받지 못한 상태(빈 값)에서 빈 생성 자체가 실패해 애플리케이션이 부팅되지 않는 문제를 실제로
+  겪었다. `EncryptedStringConverter`와 같은 이유로 secret 검증을 실제 웹훅 수신 시점까지 미루도록
+  `PortOneWebhookService.handle()`에서 매 호출마다 새로 생성하는 방식으로 바꿨다.
+- **결제 확정은 전적으로 웹훅에 위임**: `subscriptions` 스키마에는 대기 상태(PENDING)가 없어(ACTIVE/PAST_DUE/
+  CANCELED 셋뿐), `subscribe()`가 PortOne에 최초 결제+다음 달 예약 요청을 보낸 직후에는 구독을 `PAST_DUE`(아직
+  확정 안 됨)로 둔다. 최초 `Transaction.Paid` 웹훅이 와야 비로소 `ACTIVE`로 전환한다.
+- **`paymentId`에 `subscriptionId`를 인코딩**: PortOne 웹훅 바디는 `paymentId`/`storeId`/`transactionId`만
+  주고 우리 쪽 구독을 가리키는 정보가 없다. 별도 매핑 테이블 없이, 우리가 채번하는 `paymentId`를
+  `"sub_{subscriptionId}_{UUID}"` 형식으로 만들어(UUID는 `_`를 포함하지 않으므로 파싱이 안전하다) 웹훅
+  수신 시 문자열만으로 구독을 되짚는다(`PaymentIds`).
+- **웹훅 바디의 금액은 신뢰하지 않는다**: `WebhookTransactionDataPaid`엔 `amount` 필드 자체가 없다(위변조
+  가능성도 있어 애초에 신뢰하면 안 됨). `Transaction.Paid` 처리 시 `paymentClient.getPayment(paymentId)`로
+  PortOne에 직접 조회해 확정된 금액을 가져온다.
+- **재예약 체이닝**: `Transaction.Paid`를 받을 때마다(최초든 반복이든) 그 다음 달 결제를 다시
+  `createPaymentSchedule`로 예약한다 — [03] §4-7의 "반복 체이닝" 그대로. 별도 스케줄러 없이 매 결제 성공이
+  다음 결제를 스스로 예약하는 구조.
+- **결제 실패 시 정책**: `Transaction.Failed`는 구독을 즉시 `PAST_DUE`로, 회원 플랜을 즉시 `FREE`로 되돌린다.
+  [03] §4-7은 "재시도/알림 정책"을 미확정 항목으로만 언급해 구체적인 재시도 알고리즘은 이번 phase 스코프에
+  넣지 않았다(그레이스 기간 없이 즉시 회수).
+- **"고급 분석", "설계 문서 export"는 별도로 게이팅하지 않았다**: [01] 13번 BM 섹션의 "이후" 항목 문구를
+  그대로 가져온 것일 뿐, [02]/[03] 어디에도 이 두 기능을 무엇으로 제한할지 정의돼 있지 않다(분석/설계
+  생성과 PDF export는 이미 모든 사용자에게 동일하게 열려 있다 — Phase 08/10). 실제로 구현 가능한 건
+  "무제한 생성"(FREE 티어 quota를 우회하는 것)뿐이라, `Subscription`이 확정될 때 `Member.plan`을 PRO로
+  동기화해 기존 `UsageQuotaService`(Phase 06)가 그대로 무제한 처리하게 했다.
+- **가격은 임의값**: 문서에 Pro 구독료가 명시돼 있지 않아 `app.portone.pro-monthly-price-krw: 9900`으로
+  직접 정했다(설정값이라 나중에 바꾸기 쉬움).
+- **전체 실결제 E2E 검증은 이번 phase 스코프 밖**: 빌링키 발급은 프론트/Admin SDK(브라우저)로만 가능하고,
+  PortOne이 실제 웹훅을 보내려면 공개 도메인이 필요하다 — 둘 다 지금 갖추고 있지 않다. 이는 우연이 아니라
+  milestone에도 이미 반영돼 있다: Phase 14 작업 항목에 "PortOne 웹훅 URL을 실제 배포 도메인으로 등록... 확인"이
+  명시돼 있어, 실배포 이후로 원래 계획된 검증이다.
+
+## 테스트 결과
+
+실제 돈이 오가는 통합이라, "존재할 수 없는 빌링키로 결제를 시도하면 PortOne이 과금 이전 단계에서 거절한다"는
+성질을 이용해 무료/안전하게 실제 API 연동을 검증했다. 이 요청은 `api.portone.io`에 실제로 도달했고(인증
+성공), 카드사/PG 단계까지 가지 않고 `BillingKeyNotFoundError`로 즉시 거절돼 비용이 전혀 발생하지 않는다.
+
+- **실제 PortOne API 왕복 확인**: 존재하지 않는 빌링키로 `POST /api/subscriptions` 호출 → 실제 `payWithBillingKey`
+  API 호출까지 도달, `BillingKeyNotFoundException`으로 정상 거절, 400 응답. 이 한 번의 왕복으로 API Secret/
+  Store ID/Channel Key 조합, 요청 바디 구성(파라미터 순서·타입), 응답 파싱이 전부 실제 환경 기준으로 맞다는
+  것을 확인했다 — 첫 시도에 정상 동작.
+- **실패한 구독 시도는 깨끗이 롤백됨**: PortOne이 거절해도 `@Transactional`로 `subscriptions` 행이 남지
+  않음을 확인 — 재시도 시 "이미 구독 중" 오류 없이 다시 시도 가능.
+- **중복 구독 방지**: DB에 직접 `PAST_DUE`/`ACTIVE` 구독 행을 넣고 재구독 시도 → PortOne 호출 전에 400으로
+  막힘(무료 확인). `CANCELED` 상태에서는 재구독이 허용됨을 확인.
+- **웹훅 서명 검증**: 실제 Standard Webhooks 알고리즘(HMAC-SHA256, `"{id}.{timestamp}.{body}"`, `v1,` 접두
+  서명)을 Python으로 재구현해 로컬 전용 테스트 secret으로 서명한 요청을 직접 만들어 검증했다(운영
+  `PORTONE_WEBHOOK_SECRET`은 아직 실제 웹훅 URL 등록 전이라 미발급 상태). 잘못된 서명은 400, 올바른 서명은
+  통과함을 확인.
+- **`Transaction.Failed` 전체 경로 실제 검증**: 잘못 만든 서명 웹훅 → 400. 올바르게 서명한 웹훅 →
+  `payment_history`에 FAILED 행 기록, `subscriptions.status`가 `PAST_DUE`로, `users.plan`이 `FREE`로 전환됨을
+  DB로 직접 확인. 같은 `payment_id`로 재전송(PortOne의 최대 5회 재시도 시뮬레이션) → 두 번째 요청은 기존
+  행을 건드리지 않고 그대로 200 반환(멱등 처리 확인).
+- **`Transaction.Paid`의 실패 경로 검증**: PortOne에 실제로 존재하지 않는 `paymentId`로 서명된 Paid 웹훅을
+  보내면 `paymentClient.getPayment()`가 실패해 500이 반환됨(PortOne이 나중에 재시도하도록 유도하는 의도된
+  동작)을 확인 — 이때도 구독/회원 상태가 전혀 바뀌지 않고 `payment_history`에도 행이 남지 않아, 트랜잭션이
+  깨끗하게 롤백됨을 확인.
+- **버그 발견 및 수정 (2건)**:
+  1. `.env`/`.env.example`의 `PORTONE_WEBHOOK_SECRET= # TODO: ...`가 인라인 주석이 포함된 채로 값에 그대로
+     들어가는 버그를 발견했다. Spring이 `.env`를 `.properties` 형식으로 읽는데(`spring.config.import`),
+     `.properties`는 줄 끝 인라인 `#` 주석을 지원하지 않아 `PORTONE_WEBHOOK_SECRET`의 실제 값이
+     `" # TODO: 추 후, 관련 기능 완성되면 추가할 것"` 전체가 돼버렸다. 이전까지 아무도 이 값을 읽지 않아
+     드러나지 않았던 잠재 버그 — `WebhookVerifier` 빈이 이를 처음 소비하면서 부팅 실패로 표면화됐다. 주석을
+     별도 줄로 옮겨 수정.
+  2. **자가 호출로 인한 `@Transactional` 무시 버그**: `PortOneWebhookService.handle()`(외부에서 호출되는
+     진입점, 원래 클래스 레벨 `@Transactional(readOnly = true)`에 의존)이 내부에서 `this.handlePaid(...)`/
+     `this.handleFailed(...)`를 직접 호출했는데, 이 메서드들에 붙여둔 `@Transactional`(쓰기 가능)이 Spring
+     프록시를 거치지 않아 무시되고, 실제로는 `handle()`의 읽기 전용 트랜잭션 안에서 실행되고 있었다. 그
+     결과 `Transaction.Failed` 웹훅이 200을 반환하고 `users.plan`은 정상 변경되는 것처럼 보였지만(이미
+     managed 상태였던 엔티티의 merge라 우연히 반영됨), `payment_history`에 새로 만든 행은 조용히 저장되지
+     않는 현상을 실제 DB 조회로 발견했다. `@Transactional`을 실제 외부 진입점인 `handle()`로 옮기고,
+     자가 호출되는 `handlePaid`/`handleFailed`에서는 의미 없는 `@Transactional`을 제거해 해결 — 수정 후
+     재검증해 `payment_history` 행이 정상적으로 남는 것을 확인했다.
+- 테스트로 만든 사용자/구독/결제 이력 행을 모두 정리했고, `./gradlew test`(Testcontainers 기반 부팅 테스트)
+  통과를 확인했다.
+
+### 추가 검증 — 실제 발급받은 웹훅 secret으로 재검증
+
+사용자가 PortOne 관리자콘솔(테스트 모드)에서 웹훅 URL을 `http://localhost:8080/webhooks/portone`로 등록하고
+실제 웹훅 secret을 발급받아 `.env`에 반영했다. 콘솔의 "호출 테스트" 버튼은 응답코드 407을 "성공"으로
+표시했는데, 확인해보니 우리 서버 코드에는 407을 반환하는 경로가 전혀 없고(웹훅 헤더 없이 호출해도 500/400) —
+`localhost`는 PortOne 서버 인프라 입장에서 사용자의 로컬 머신을 가리킬 수 없으므로, 이 테스트 호출은 실제로
+로컬 서버에 도달하지 못하고 PortOne 내부 프록시에서 막힌 것으로 보인다(진짜 원격 전달 검증은 Phase 14에서
+공개 URL로 재확인 필요).
+
+대신 발급된 실제 secret으로 Standard Webhooks 서명을 직접 재구현해 로컬에서 재검증했다:
+- 잘못된 secret으로 서명 → `WebhookVerificationException`("No matching signature found")으로 정상 거절 확인
+  (이전엔 secret이 비어 있어 "Empty key" 예외였던 것과 구분됨 — 실제 secret이 로드됐다는 증거).
+- 실제 secret으로 올바르게 서명한 `Transaction.Failed` 웹훅 → `payment_history`에 FAILED 행 기록,
+  `subscriptions.status=PAST_DUE`, `users.plan=FREE`로 정상 전환, 중복 전송도 멱등 처리됨을 재확인.
+- **버그 추가 발견 및 수정**: 웹훅 헤더(`webhook-id` 등)가 누락된 요청이 500을 반환하던 것을 재검증 중 발견 —
+  `@RequestHeader`가 필수인데 누락 시 `MissingRequestHeaderException`을 처리하는 핸들러가 없었다.
+  `GlobalExceptionHandler`에 핸들러를 추가해 400으로 정상화.
 
 ---
 
