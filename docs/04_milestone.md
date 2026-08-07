@@ -48,7 +48,7 @@
 > `docker-compose.yml`엔 로컬 Redis가 있었지만 Phase 01 당시 배포용 Render Key Value 프로비저닝이 누락된 채
 > 넘어간 것 — Redis는 `RefreshTokenStore`(로그인/로그아웃마다 필수 경유)의 유일한 저장소라 로그인 자체가 완전히
 > 막히는 문제였다. `render.yaml`에 `type: keyvalue` 서비스(`alrdream-redis`, free 플랜, `maxmemoryPolicy:
-> volatile-lru` — 모든 키에 TTL이 있어 메모리 압박 시 오래된 세션을 우선 축출하는 게 noeviction의 "로그인
+volatile-lru` — 모든 키에 TTL이 있어 메모리 압박 시 오래된 세션을 우선 축출하는 게 noeviction의 "로그인
 > 자체가 막히는" 실패보다 안전하다고 판단, `ipAllowList: []`로 내부망 전용)를 추가하고, 백엔드 서비스의
 > `REDIS_HOST`/`REDIS_PORT` 환경변수를 `fromService`로 자동 주입하도록 연결했다(애플리케이션 코드/로컬 `.env`
 > 변경 없음 — 기존에 읽던 프로퍼티 이름 그대로). `management.health.redis.enabled`도 `false`→`true`로 전환해
@@ -692,17 +692,105 @@ budget 제약상 실제 유료 Claude 호출은 딱 3번(기획/분석/설계 �
 
 ## 작업 항목
 
-- [ ] 구현시 데스크톱 / 랩톱 / 태블릿 / 모바일 반응형 화면 대응
-- [ ] 로그인/회원가입 화면 (자체 + Google. **Apple은 Apple Developer 자격증명 이슈로 보류 — 크리덴셜 준비되면 버튼 추가**)
-- [ ] 워크스페이스 목록 및 생성 플로우 (분기 선택 → 설문) [03] §3-1
-- [ ] 설문 엔진 — 문항 타입별 공용 컴포넌트 (`SingleChoiceField`/`MultiChoiceField`/`TextField`/`ScaleField`) [03] §3-3
-- [ ] AI 생성 대기 화면 (Job 폴링)
-- [ ] 워크스페이스 상세 — 기획/분석/설계/설정 탭
-- [ ] PDF 열람/다운로드
+- [x] 구현시 데스크톱 / 랩톱 / 태블릿 / 모바일 반응형 화면 대응
+- [x] 로그인/회원가입 화면 (자체 + Google. **Apple은 Apple Developer 자격증명 이슈로 보류 — 크리덴셜 준비되면 버튼 추가**)
+- [x] 워크스페이스 목록 및 생성 플로우 (분기 선택 → 설문) [03] §3-1
+- [x] 설문 엔진 — 문항 타입별 공용 컴포넌트 (`SingleChoiceField`/`MultiChoiceField`/`TextField`/`ScaleField`) [03] §3-3
+- [x] AI 생성 대기 화면 (Job 폴링)
+- [x] 워크스페이스 상세 — 기획/분석/설계/설정 탭
+- [x] PDF 열람/다운로드
+
+## 설계 결정
+
+- **크로스플랫폼 스택**: [03] §3-2 그대로 Expo Router(SDK 57) + react-native-web. `src/app`을 라우터 루트로 쓰는
+  기존 스캐폴딩(Phase 00)을 그대로 활용. Expo SDK가 최근에 크게 바뀌어(`frontend/AGENTS.md`가 명시적으로 경고)
+  라우팅 인증 패턴(`Stack.Protected` + `guard`), 환경변수(`EXPO_PUBLIC_` 접두사), `expo-secure-store` 등은 실제
+  최신 문서를 그때그때 확인하며 작성 — 예전 Expo Router 버전의 수동 리다이렉트 패턴이 아니라 새 `Stack.Protected`
+  선언형 가드를 사용.
+- **인증 세션 저장**: `expo-secure-store`가 web을 지원하지 않아(SDK 57 기준) `tokenStorage`에서
+  `Platform.OS === "web"`이면 `localStorage`, 아니면 `SecureStore`로 분기(Admin의 refresh-token rotation
+  dedup 패턴도 `api/client.ts`에 동일하게 이식).
+- **Google 로그인 구현 방식**: Expo 공식 문서가 이제 `@react-native-google-signin/google-signin`을 권장하지만,
+  이 라이브러리는 커스텀 네이티브 코드가 필요해 Expo Go/웹에서 동작하지 않고 EAS 개발 빌드 + Firebase/Play
+  Console SHA-1 등록이 필요하다 — 이번 세션엔 그런 네이티브 빌드 파이프라인이 없어 검증이 불가능하다. 대신
+  `expo-auth-session`으로 Google의 OAuth 엔드포인트에 직접 implicit id_token 플로우(`ResponseType.IdToken`,
+  `usePKCE:false`, `nonce`)를 구현 — Expo Go와 웹 양쪽에서 동작하고 백엔드가 이미 검증하는 `idToken` 그대로
+  넘길 수 있다. **한계**: Google Cloud Console에 환경별(웹 배포 도메인, Expo Go 프록시 등) redirect URI가
+  등록돼 있어야 실제로 토큰이 발급되는데, 이 콘솔 설정은 이번 세션에서 접근/확인이 불가능해 **실제 Google
+  로그인 성공까지는 검증하지 못했다** — 이메일/비밀번호 로그인은 완전히 실동작 검증 완료. Apple은 Phase 03/12와
+  동일한 이유로 이번에도 버튼을 노출하지 않는다.
+- **워크스페이스 상세의 "탭"과 API의 중첩 구조 간극**: `기획/분석/설계` 3개 API는 구조적으로
+  `planning-versions/{id}/analysis-versions/{id}/design-versions`처럼 부모 버전 ID가 경로에 그대로 박혀있어,
+  "분석 탭"을 보려면 "어느 기획 버전의 분석인지"가 필요하다. 설계 문서([03] §3-1)는 이걸 4개의 평평한 탭으로만
+  그려놨고 버전 트리 선택 UI까지는 명시하지 않아, **최신 완료 버전을 자동으로 따라가는 방식**으로 단순화했다
+  — 분석 탭은 "가장 최근에 완료된 기획 버전"의 분석 목록을, 설계 탭은 "그 분석 목록 중 가장 최근에 완료된
+  버전"의 설계 목록을 보여준다. 이는 백엔드의 `DesignFeatureOptionResolver`(설계 설문의 동적 옵션도 "워크스페이스의
+  최신 완료된 분석"에서만 가져옴, 특정 analysisVersionId에 안 묶임)와도 동작이 일치한다. 여러 기획 버전을 병렬로
+  키우며 서로 다른 분석/설계를 이어가는 시나리오는 스코프 밖으로 명시적으로 남겨뒀다.
+- **"기획 수정" 시 원래 설문 종류(PLANNING_HAS_IDEA/EXPLORING) 역추론**: `PlanningVersionDetail`은
+  `surveyResponseId`만 갖고 있고 `SurveyResponseDetail`에는 `surveyKey`가 없어, "수정" 시 어느 분기 설문으로
+  다시 열어야 할지 API만으로는 알 수 없다. 두 설문 정의(PLANNING_HAS_IDEA/PLANNING_EXPLORING)를 모두 가져와
+  기존 응답의 `questionId` 집합이 어느 쪽과 일치하는지로 역추론하는 `inferPlanningDefinition`을 작성 —
+  두 설문의 문항 ID 집합이 서로 다르므로(각 8~10문항, 겹치지 않는 promptKey) 결정적으로 판별 가능하다.
+- **PDF 열람/다운로드**: 별도 인앱 뷰어 없이 서명 URL을 받아 `Linking.openURL`로 여는 방식 — 네이티브에서는
+  OS 기본 PDF 뷰어/브라우저가, 웹에서는 새 탭이 열린다. `DocumentResponse.downloadUrl`이 이미 만료시간이 있는
+  서명 URL이라 프론트가 캐싱하지 않고 매번 새로 발급받는다.
+- **디자인 시스템**: Admin(`admin/src/index.css`)과 동일한 브랜드 팔레트(보라 `#7c3aed` 계열)를
+  `components/ui/theme.ts`로 이식해 Admin·Frontend 두 앱이 시각적으로 통일되게 했다. `useBreakpoint`
+  훅(모바일 <640/태블릿 <1024/데스크톱)과 `ScreenContainer`(태블릿·데스크톱에서 콘텐츠 폭 제한 + 중앙 정렬,
+  모바일은 풀폭)로 반응형을 공통 처리.
+- **React Compiler 린트 규칙과의 충돌**: 이 프로젝트는 `experiments.reactCompiler: true`라 `expo lint`가
+  `react-hooks/set-state-in-effect`를 에러로 강제한다 — "선택된 항목이 바뀌면 상세를 다시 불러온다"는 이
+  앱 전반의 흔한 패턴(Admin에서도 똑같이 썼던)이 이 프로젝트에서는 전부 걸렸다. 규칙을 억제하는 대신,
+  effect 본문에서 재사용 가능한 이름 있는 함수(`reload` 등)를 직접 호출하지 않고, effect 전용의 새
+  익명 async 함수를 그 자리에서 정의·즉시실행하는 방식으로 전부 고쳤다(이벤트 핸들러에서 재사용할 `reload`는
+  별도로 유지) — 정적 분석이 "effect가 외부의 재사용 함수를 부르는지"까지는 추적하지만 즉시실행 함수 내부까지는
+  추적하지 않는 것으로 보인다.
+
+## 테스트 결과
+
+Playwright MCP로 `expo start --web`(포트 8081) + 로컬 백엔드(`:8080`)를 동시에 띄우고, 실제 Chromium
+브라우저로 전 기능을 조작하며 검증했다(Admin Phase 12와 동일한 방식 — 이번엔 처음부터 브라우저 자동화가
+가능한 상태로 시작).
+
+- **정적 검증**: `tsc --noEmit`, `expo lint` 모두 통과. 개발 중 `react-hooks/set-state-in-effect` 에러
+  10건을 실제로 만나 위 "설계 결정"에 정리한 패턴으로 전부 수정.
+- **회원가입 → 로그인 → 로그아웃 → 재로그인**: 이메일/비밀번호로 실제 계정 생성, 로그아웃 후 같은 계정으로
+  재로그인까지 실동작 확인. 세션은 `localStorage`(web)에 저장되어 전체 페이지 새로고침 후에도 유지되는 것도
+  확인(단, 인증된 상태에서 딥링크 URL로 새로고침하면 `Stack.Protected`의 로딩 게이트를 거치며 워크스페이스
+  목록으로 튕기는 것을 발견 — 세션 자체는 안 끊기고 데이터 손실도 없어 치명적이진 않지만, 딥링크 보존은
+  스코프 밖으로 남겨둠).
+- **워크스페이스 생성 전체 파이프라인을 실제 Claude API 호출로 처음부터 끝까지 검증**(이전 Phase들은
+  curl/DB 직접 확인 위주였는데, 이번엔 브라우저 조작 → 실제 생성 → 화면 렌더링까지 전부 눈으로 확인):
+  1. 워크스페이스 생성(이름 입력 + "아이템 있어요" 분기 선택) → `PLANNING_HAS_IDEA` 설문 10문항(텍스트/척도/단일
+     선택/다중 선택/"잘 모르겠어요" 전부 포함) 작성 → 제출 → 기획 생성 Job 생성 → AI 생성 대기 화면(폴링) →
+     완료 후 워크스페이스 상세로 자동 이동 → **실제 Claude가 생성한 기획안 10개 섹션이 전부 올바른 한글
+     라벨로 렌더링**되는 것 확인.
+  2. 기획 상세에서 "PDF 다운로드" 클릭 → 실제 서명된 Supabase Storage URL이 새 탭으로 열리는 것 확인.
+  3. "이 기획으로 분석 시작" 클릭(설문 없이 바로 Job 생성) → 폴링 → 완료 후 분석 탭으로 자동 이동 → 분석
+     5개 섹션(합법성/자원/경쟁환경/핵심기능후보 배지/종합의견) 렌더링 확인.
+  4. 분석 상세에서 "이 분석으로 설계 시작" → **DESIGN 설문의 `core_feature_priority` 문항에 방금 생성된
+     분석의 `core_feature_candidates` 7개가 실제로 동적 주입되어 나타나는 것**까지 확인(정적 옵션이 아님을
+     실제 데이터로 검증) → 설문 제출 → 설계 생성 Job → 폴링 → 완료 → 설계 탭 자동 이동 → 기능 명세가
+     우선순위 배지(필수/권장)와 함께 렌더링되는 것까지 확인.
+- **설정 탭**: 워크스페이스 이름 변경 저장 → 성공 메시지 확인. **버그 발견 및 수정**: 이름을 변경해도 화면
+  상단 헤더 타이틀이 갱신되지 않는 문제를 실제 조작 중 발견 — `navigation.setOptions`가 최초 워크스페이스
+  조회 시점에만 호출되고 있었음. 헤더 타이틀을 `workspace.name`이 바뀔 때마다 동기화하는 별도 effect로
+  분리해 수정, 재조작으로 헤더가 즉시 갱신되는 것 재확인.
+- **반응형**: 모바일 너비(390px)에서 로그인/워크스페이스 목록/기획 상세 화면까지 텍스트 줄바꿈과 카드 레이아웃이
+  깨지지 않는 것을 실제 스크린샷으로 확인.
+- **테스트 후 정리**: 테스트로 만든 `frontend-e2e@alrdream.test` 계정과 그 아래 워크스페이스/기획·분석·설계
+  버전/설문 응답/AI Job/문서 레코드를 FK 의존 순서대로(설계→분석→기획→설문응답→Job/사용량/구독→워크스페이스→
+  계정) 전부 삭제해 실제 Supabase에 테스트 흔적을 남기지 않았다(Supabase Storage에 업로드된 PDF 오브젝트
+  자체는 정리 스코프에서 제외 — DB 레코드만 정리).
+- **한계**: Google 로그인은 위 설계 결정에 적은 대로 redirect URI 콘솔 등록이 없어 실제 토큰 발급까지는
+  검증하지 못했다. 네이티브(iOS/Android) 빌드는 이 환경에 시뮬레이터/실기기가 없어 web 빌드로만 검증했다 —
+  react-native-web을 통한 렌더링이라 레이아웃/로직은 대부분 공유되지만, 네이티브 전용 동작(SecureStore,
+  실제 OS 딥링크 등)은 실기기 테스트가 필요하다.
 
 ---
 
-# Phase 14: 프로덕션 릴리즈 마무리
+# Phase XX: 프로덕션 릴리즈 마무리
 
 > 기본 배포 파이프라인은 Phase 01에서 이미 구축됨. 여기서는 완성된 전 기능을 실제로 얹고 최종 점검한다.
 
