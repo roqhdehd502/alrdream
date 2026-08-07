@@ -1,7 +1,7 @@
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Pressable, Text, View } from "react-native";
 import { Card } from "../ui/Card";
 import { StatusBadge } from "./StatusBadge";
-import { colors, typography } from "../ui/theme";
+import { useTheme, useThemedStyles } from "../ui/ThemeContext";
 import type { VersionStatus } from "../../types";
 
 interface VersionItem {
@@ -18,6 +18,12 @@ export function VersionList<T extends VersionItem>({
   versions: T[];
   onSelect: (version: T) => void;
 }) {
+  const { typography } = useTheme();
+  const styles = useThemedStyles((colors) => ({
+    list: { gap: 10 },
+    item: { borderColor: colors.border },
+    row: { flexDirection: "row" as const, alignItems: "center" as const, justifyContent: "space-between" as const },
+  }));
   const sorted = [...versions].sort((a, b) => b.versionNo - a.versionNo);
   return (
     <View style={styles.list}>
@@ -35,9 +41,3 @@ export function VersionList<T extends VersionItem>({
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  list: { gap: 10 },
-  item: { borderColor: colors.border },
-  row: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-});

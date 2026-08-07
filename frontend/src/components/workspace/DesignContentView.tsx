@@ -1,10 +1,15 @@
-import { StyleSheet, Text, View } from "react-native";
+import { Text, View } from "react-native";
 import { Section, TextRow, ListRow, StageList } from "./ContentSections";
 import { Badge } from "../ui/Badge";
-import { colors, typography } from "../ui/theme";
+import { useTheme, useThemedStyles } from "../ui/ThemeContext";
 import type { DesignContent } from "../../types";
 
 export function DesignContentView({ content }: { content: DesignContent }) {
+  const { typography } = useTheme();
+  const styles = useThemedStyles((colors) => ({
+    featureRow: { gap: 4, borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 10 },
+    featureHeader: { flexDirection: "row" as const, justifyContent: "space-between" as const, alignItems: "center" as const },
+  }));
   return (
     <View style={{ gap: 12 }}>
       <Section title="🧩 기능 명세">
@@ -52,8 +57,3 @@ export function DesignContentView({ content }: { content: DesignContent }) {
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  featureRow: { gap: 4, borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 10 },
-  featureHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-});

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { Text, View } from "react-native";
 import { useRouter } from "expo-router";
 import { analysisApi } from "../../api/analysis";
 import { designApi } from "../../api/design";
@@ -7,7 +7,7 @@ import { surveysApi } from "../../api/surveys";
 import { ApiError } from "../../api/client";
 import { Button } from "../ui/Button";
 import { EmptyState, ErrorBanner, Loading } from "../ui/Feedback";
-import { colors, typography } from "../ui/theme";
+import { useTheme, useThemedStyles } from "../ui/ThemeContext";
 import { VersionList } from "./VersionList";
 import { StatusBadge } from "./StatusBadge";
 import { PdfButton } from "./PdfButton";
@@ -17,6 +17,16 @@ import type { AnalysisVersionSummary, DesignVersionDetail, DesignVersionSummary,
 
 export function DesignTab({ workspaceId, planningVersionId }: { workspaceId: string; planningVersionId: string | null }) {
   const router = useRouter();
+  const { typography } = useTheme();
+  const styles = useThemedStyles((colors) => ({
+    wrap: { gap: 16 },
+    detailHeader: { flexDirection: "row" as const, alignItems: "center" as const, justifyContent: "space-between" as const },
+    backButton: { alignSelf: "flex-start" as const },
+    actions: { gap: 10 },
+    deleteLink: { alignSelf: "flex-start" as const },
+    confirmRow: { gap: 10, backgroundColor: colors.dangerSoft, padding: 14, borderRadius: 12 },
+    confirmButtons: { flexDirection: "row" as const, gap: 10 },
+  }));
   const [analysisVersion, setAnalysisVersion] = useState<AnalysisVersionSummary | null | undefined>(undefined);
   const [versions, setVersions] = useState<DesignVersionSummary[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -220,13 +230,3 @@ export function DesignTab({ workspaceId, planningVersionId }: { workspaceId: str
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  wrap: { gap: 16 },
-  detailHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  backButton: { alignSelf: "flex-start" },
-  actions: { gap: 10 },
-  deleteLink: { alignSelf: "flex-start" },
-  confirmRow: { gap: 10, backgroundColor: colors.dangerSoft, padding: 14, borderRadius: 12 },
-  confirmButtons: { flexDirection: "row", gap: 10 },
-});

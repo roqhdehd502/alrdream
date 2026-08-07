@@ -1,9 +1,24 @@
-import { StyleSheet, TextInput } from "react-native";
-import { colors, radius } from "../ui/theme";
+import { TextInput } from "react-native";
+import { useTheme, useThemedStyles } from "../ui/ThemeContext";
+import { radius } from "../ui/theme";
 import { QuestionShell } from "./QuestionShell";
 import type { FieldProps } from "./fieldTypes";
 
 export function SurveyTextField({ question, answer, onChange }: FieldProps) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles((colors) => ({
+    input: {
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: radius.sm,
+      paddingVertical: 10,
+      paddingHorizontal: 12,
+      fontSize: 14.5,
+      color: colors.text,
+      backgroundColor: colors.surface,
+    },
+    multiline: { minHeight: 96, textAlignVertical: "top" as const },
+  }));
   const multiline = question.type === "LONG_TEXT";
   return (
     <QuestionShell
@@ -23,17 +38,3 @@ export function SurveyTextField({ question, answer, onChange }: FieldProps) {
     </QuestionShell>
   );
 }
-
-const styles = StyleSheet.create({
-  input: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.sm,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    fontSize: 14.5,
-    color: colors.text,
-    backgroundColor: colors.surface,
-  },
-  multiline: { minHeight: 96, textAlignVertical: "top" },
-});

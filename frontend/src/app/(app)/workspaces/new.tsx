@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Pressable, Text, View } from "react-native";
 import { useRouter } from "expo-router";
 import { workspacesApi } from "../../../api/workspaces";
 import { surveysApi } from "../../../api/surveys";
@@ -10,7 +10,7 @@ import { Button } from "../../../components/ui/Button";
 import { Card } from "../../../components/ui/Card";
 import { Field } from "../../../components/ui/Field";
 import { ErrorBanner, Loading } from "../../../components/ui/Feedback";
-import { colors, typography } from "../../../components/ui/theme";
+import { useTheme, useThemedStyles } from "../../../components/ui/ThemeContext";
 import { SurveyForm } from "../../../components/survey/SurveyForm";
 import type { SurveyAnswer, SurveyDefinition, SurveyKey } from "../../../types";
 
@@ -21,6 +21,13 @@ const BRANCHES: { key: SurveyKey; title: string; description: string }[] = [
 
 export default function NewWorkspaceScreen() {
   const router = useRouter();
+  const { typography } = useTheme();
+  const styles = useThemedStyles((colors) => ({
+    branches: { gap: 10 },
+    branchCard: { borderColor: colors.border },
+    branchCardActive: { borderColor: colors.primary, backgroundColor: colors.primarySoft },
+    activeText: { color: colors.primaryHover },
+  }));
   const [step, setStep] = useState<"form" | "survey">("form");
   const [name, setName] = useState("");
   const [branch, setBranch] = useState<SurveyKey | null>(null);
@@ -101,10 +108,3 @@ export default function NewWorkspaceScreen() {
     </ScreenContainer>
   );
 }
-
-const styles = StyleSheet.create({
-  branches: { gap: 10 },
-  branchCard: { borderColor: colors.border },
-  branchCardActive: { borderColor: colors.primary, backgroundColor: colors.primarySoft },
-  activeText: { color: colors.primaryHover },
-});

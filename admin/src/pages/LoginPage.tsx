@@ -2,6 +2,8 @@ import { useState, type FormEvent } from "react";
 import { Navigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import { ApiError } from "../api/client";
+import { getTheme, toggleTheme } from "../theme";
+import { MoonIcon, SunIcon } from "../components/icons";
 
 export function LoginPage() {
   const { status, login } = useAuth();
@@ -9,6 +11,7 @@ export function LoginPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [theme, setThemeState] = useState(getTheme);
 
   if (status === "authenticated") {
     return <Navigate to="/dashboard" replace />;
@@ -29,6 +32,14 @@ export function LoginPage() {
 
   return (
     <div className="login-shell">
+      <button
+        type="button"
+        className="theme-toggle-fab"
+        aria-label="테마 전환"
+        onClick={() => setThemeState(toggleTheme())}
+      >
+        {theme === "dark" ? <SunIcon size={16} /> : <MoonIcon size={16} />}
+      </button>
       <div className="login-card">
         <img src="/favicon.svg" alt="" className="login-logo" />
         <h1>알려드림 Admin</h1>

@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from "react";
-import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Text, View } from "react-native";
 import { useLocalSearchParams, useRouter, type Href } from "expo-router";
 import { aiJobsApi } from "../../api/aiJobs";
 import { ApiError } from "../../api/client";
 import { Button } from "../../components/ui/Button";
-import { colors, typography } from "../../components/ui/theme";
+import { useTheme, useThemedStyles } from "../../components/ui/ThemeContext";
 import type { JobStatus } from "../../types";
 
 const POLL_INTERVAL_MS = 2000;
@@ -19,6 +19,13 @@ const STATUS_LABEL: Record<JobStatus, string> = {
 export default function GeneratingScreen() {
   const router = useRouter();
   const { jobId, redirectTo } = useLocalSearchParams<{ jobId: string; workspaceId?: string; redirectTo?: string }>();
+  const { colors, typography } = useTheme();
+  const styles = useThemedStyles((colors) => ({
+    root: { flex: 1, alignItems: "center" as const, justifyContent: "center" as const, gap: 12, padding: 24, backgroundColor: colors.bg },
+    status: { marginTop: 8 },
+    message: { textAlign: "center" as const },
+    backButton: { marginTop: 16 },
+  }));
   const [status, setStatus] = useState<JobStatus>("PENDING");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -76,10 +83,3 @@ export default function GeneratingScreen() {
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  root: { flex: 1, alignItems: "center", justifyContent: "center", gap: 12, padding: 24, backgroundColor: colors.bg },
-  status: { marginTop: 8 },
-  message: { textAlign: "center" },
-  backButton: { marginTop: 16 },
-});

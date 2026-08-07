@@ -790,6 +790,160 @@ Playwright MCP로 `expo start --web`(포트 8081) + 로컬 백엔드(`:8080`)를
 
 ---
 
+# Phase 14: 서비스 컨셉 디자인 변경
+
+## 작업 항목
+
+- [x] admin / frontend를 대상으로 적용
+- [x] 로고, 컬러 팔레트, 폰트를 변경 (로고는 assets/\* 참고, 컬러 팔레트 및 폰트는 05_color_and_font.md 참고)
+- [x] 라이트 테마 / 다크 테마 적용
+
+## 설계 결정
+
+- **로고 자산화**: `assets/01_app_icon.svg`(정적)·`02_app_loading.svg`(애니메이션, 최종 프레임이 01과 동일)를
+  기준으로 로컬에 rasterize 도구가 없어 `npx sharp-cli`를 즉석 설치해 PNG를 생성했다. iOS/웹 아이콘은 OS가 자체
+  마스크(둥근 모서리)를 씌우므로 **모서리가 없는 full-bleed 정사각형 + 불투명 배경**으로 별도 렌더링했고(아이콘에
+  둥근 모서리를 미리 구워 넣으면 OS 마스크와 이중으로 겹치거나 투명 모서리가 검게 나올 수 있어 회피),
+  Android adaptive icon은 foreground(글리프만, 투명 배경, 안전영역 여백 확보)·background(그라디언트만,
+  no-rounding)·monochrome(foreground 재사용) 3장으로 분리했다.
+- **Expo 앱 아이콘 설정 단순화**: 기존 `ios.icon`이 Expo 기본 템플릿의 Icon Composer 번들(`assets/expo.icon`,
+  Expo 로고 그리드)을 가리키고 있었다. SDK 57 공식 문서 확인 결과 최상위 `icon`(1024×1024 PNG) 하나로 iOS까지
+  충분히 커버되므로 `ios.icon`과 `assets/expo.icon` 디렉터리를 통째로 제거해 설정을 단순화했다. 함께 남아있던
+  기본 템플릿 잔재(`react-logo*`, `expo-badge*`, `expo-logo.png`, `tutorial-web.png`, `tabIcons/*`)도 코드
+  전체에서 미사용임을 grep으로 확인 후 삭제했다.
+- **폰트 — Pretendard 선택 및 배포 방식**: `pretendard` npm 패키지는 전체 unpack 시 약 97MB(1826개 파일)라
+  그대로 의존성으로 추가하지 않고, jsdelivr npm CDN(`cdn.jsdelivr.net/npm/pretendard@1.3.9/...`)에서 필요한
+  4개 굵기(Regular/Medium/SemiBold/Bold)만 개별 파일로 내려받았다. Admin(Vite 웹)은 `admin/public/fonts/*.woff2`로
+  자체 호스팅하고 `@font-face`로 등록(런타임에 제3자 CDN에 의존하지 않도록); Frontend(Expo)는 네이티브 빌드까지
+  고려해 `frontend/assets/fonts/*.ttf`(GitHub `alternative/` 경로의 TTF본 — OTF보다 Android 호환성이 안전)로
+  번들했다.
+- **Frontend 폰트 로딩 — config plugin 대신 `useFonts` 훅**: 처음엔 `expo-font` config plugin(`app.json`의
+  `plugins` 배열에 폰트 경로 등록)을 시도했으나, 이 방식은 **네이티브 prebuild가 있어야만 적용되고 웹에는
+  적용되지 않으며**, iOS에서는 파일명이 아니라 TTF 내부에 임베드된 실제 font family 이름이 `fontFamily` 값이
+  되어 플랫폼마다 이름이 달라질 수 있는 불확실성이 있었다(이 환경엔 시뮬레이터가 없어 실제 값을 검증할 수도
+  없었다). 대신 `expo-font`의 `useFonts({ "Pretendard-Regular": require(...), ... })` 훅을 루트 레이아웃에서
+  호출해, 우리가 지정한 이름이 그대로 웹/네이티브 공통 `fontFamily` 값이 되도록 했다 — 이 환경에서 실제로
+  구동/검증 가능한 유일한 경로이기도 하다. 폰트 로딩 완료(`loaded || error`) 전까지는 기존 스플래시 화면을
+  유지하도록 `SplashScreenController`에 `fontsReady` 조건을 추가했다.
+- **React Native의 fontWeight 한계 대응**: RN에서 커스텀 폰트를 쓰면 `fontWeight` prop이 안정적으로 굵기를
+  바꿔주지 않는다(플랫폼별로 무시되거나 폰트가 해당 굵기 face를 등록하지 않으면 무시됨). 그래서 기존에
+  `fontWeight: "600"/"700"`로 강조하던 모든 지점(Button, Badge, sign-in/sign-up 링크, 로그아웃 버튼, 헤더
+  타이틀, SingleChoice/MultiChoiceField 선택 라벨, ScaleField 값, ContentSections의 라벨/뱃지/타이틀 등
+  9개 파일)을 굵기별 파일명이 곧 family인 `fontFamily: "Pretendard-SemiBold"/"Pretendard-Bold"`로 명시
+  치환했다. `theme.ts`의 `typography` 프리셋(title/heading/body/muted/label)도 동일하게 `fontFamily`를
+  갖도록 재정의해, 대부분의 화면은 프리셋 재사용만으로 자동 적용되게 했다.
+- **컬러 팔레트 — Dark + Indigo/Purple**: `docs/05_color_and_font.md`의 토큰(bg #0F172A, surface #1E293B,
+  text #F1F5F9/#94A3B8/#64748B, primary #4F46E5, hover #6366F1, success/warning/error)을 Admin의
+  CSS 커스텀 프로퍼티(`:root`)와 Frontend의 `theme.ts` `colors` 객체 양쪽에 동일하게 반영했다. 문서에
+  명시되지 않은 `primarySoft`/`accentSoft`/danger·success·warningSoft 같은 "옅은 배경" 톤은 기존 라이트
+  테마처럼 고정 밝은 hex 대신 **다크 배경 위에서 자연스럽게 어울리도록 저투명도 rgba**(예:
+  `rgba(99, 102, 241, 0.16)`)로 새로 설계했다. `border`/`border-strong`은 문서에 없어 같은 slate 계열
+  (`#334155`/`#475569`, Tailwind slate-700/600과 동일 값)로 자체 보간했다.
+  React Native `StyleSheet`와 CSS 커스텀 프로퍼티 둘 다 `rgba()` 문자열을 그대로 지원해 별도 처리 없이
+  재사용 가능했다.
+- **Admin 로그인 화면 배경 그라디언트 보정**: 기존 `.login-shell`의 은은한 radial-gradient 글로우가 옛
+  라이트 팔레트의 teal 계열 accent(#2eb4e0)를 참조하고 있었는데, 마침 다른 쪽 글로우 색(#7c3aed)이 새
+  팔레트의 accent와 정확히 일치해 두 글로우를 새 primary(#4F46E5)/accent(#7C3AED) 조합으로 교체했다
+  (라이트/다크 두 배경 모두에서 자연스러운 저채도 워시로 보이도록 고정 opacity 사용, 배경색 자체는
+  `var(--color-bg)`라 테마 전환 시 자동으로 따라간다).
+
+### 라이트/다크 테마 토글 (최초 구현이 다크 고정이었던 것을 확장)
+
+- 최초 커밋에서는 "브랜드는 Dark 기반"이라는 05_color_and_font.md의 방향을 그대로 반영해 앱을 다크로
+  하드코딩했었다(`userInterfaceStyle: "dark"`, `StatusBar style="light"` 고정). 이후 작업 항목에
+  "라이트 테마 / 다크 테마 적용"이 추가되어, 실제로 두 테마를 전환 가능한 기능으로 확장했다.
+- **Admin(Vite/CSS)**: `:root[data-theme="light"]` / `:root[data-theme="dark"]` 두 블록으로 팔레트를
+  분리하고, 실제 활성 테마는 `<html>`의 `data-theme` 속성 하나로 결정한다. 라이트 팔레트는 기존 다크 톤을
+  그대로 반전(bg #F8FAFC, text #0F172A, muted/faint 순서도 반전)해 대비 관계를 유지했고, 화이트 배경에서는
+  `primary-soft`/`danger-soft` 등 옅은 배경 톤을 rgba 대신 고정 파스텔 hex(예: `#EEF2FF`)로 바꿔 얇은 텍스트
+  대비 저하를 피했다. `index.html`에 페인트 전에 실행되는 부트스트랩 `<script>`를 추가해 `localStorage`에
+  저장된 선호값 → 없으면 `matchMedia('(prefers-color-scheme: light)')` → 그래도 없으면 브랜드 기본값(dark)
+  순서로 `data-theme`를 세팅해 FOUC(테마 전환 시 깜빡임)를 없앴다. `src/theme.ts`(`getTheme`/`setTheme`/
+  `toggleTheme`)가 이 속성과 `localStorage`를 함께 갱신하며, 로그인 화면 우상단 플로팅 버튼과 사이드바
+  하단(로그아웃 버튼 위)에 토글 UI를 뒀다.
+- **Frontend(Expo/RN) — 핵심 난제**: React Native의 `StyleSheet.create()`는 호출 시점에 값을 굳혀버려서,
+  기존처럼 `colors`를 모듈 스코프에서 한 번 import해 쓰는 구조로는 런타임에 테마를 바꿔도 이미 생성된
+  스타일이 갱신되지 않는다. 그래서 `colors`/`typography`를 정적 export에서 걷어내고,
+  `components/ui/theme.ts`는 `lightColors`/`darkColors` 두 팔레트와 `createTypography(colors)` 팩토리만
+  제공하도록 바꿨다. 새로 만든 `components/ui/ThemeContext.tsx`가 `ThemeProvider`/`useTheme()`/
+  `useThemedStyles(factory)`를 제공하며, `useThemedStyles`는 렌더마다 `StyleSheet.create(factory(colors))`를
+  다시 호출해 스타일을 항상 현재 팔레트로 재생성한다(비용은 미미해 memo화하지 않음). **`colors`/`typography`를
+  참조하던 24개 파일 전부**(components/ui/survey/workspace 및 app 라우트)를 이 훅 기반 패턴으로 바꿨다 —
+  기계적이지만 빠짐없이 처리해야 하는 작업이라 파일마다 직접 확인했다.
+- **선호도 저장 및 우선순위**: `preference`는 `"system" | "light" | "dark"` 3단계이며 `expo-secure-store`
+  (web은 `localStorage`, tokenStorage.ts와 동일한 분기 패턴)에 저장한다. `system`일 때는 RN의
+  `useColorScheme()`이 `"light"`가 아닌 한(= `"dark"`/`null`/`"unspecified"` 전부) 다크로 판단해 Admin
+  부트스트랩 스크립트와 동일한 "명시적 라이트 선호가 아니면 다크" 기준을 유지했다.
+  `ColorSchemeName`(RN 타입, Android의 `"unspecified"` 포함)과 앱 내부 `ColorScheme`("light"|"dark") 타입이
+  달라 `resolveScheme` 함수로 변환 지점을 하나로 모았다.
+- **스플래시 화면과의 동기화**: 저장된 선호도 로딩이 비동기(SecureStore)라, 로딩 전에 화면을 그리면 시스템
+  기본값 → 저장값으로 한 번 깜빡일 수 있다. 기존에 폰트 로딩 완료까지 스플래시를 띄워두던 `fontsReady` 게이트에
+  `themeReady`(선호도 로딩 완료 여부)를 추가해, 폰트·인증 상태·테마 선호도가 모두 준비된 후에만 스플래시를
+  내리도록 했다.
+- **StatusBar/OS 크롬은 완전히 동적으로 전환은 불가**: JS 레벨(`expo-status-bar`의 `<StatusBar style=... />`,
+  헤더 배경색 등)은 `scheme`에 따라 매 렌더 반응하지만, **네이티브 스플래시 화면과 Android adaptive icon
+  배경색은 앱 번들이 빌드될 때 굳는 정적 리소스**라 앱 내 토글과 실시간으로 연동되지 않는다. 이를 위해
+  `expo-splash-screen` 플러그인의 `dark: { backgroundColor }` 옵션(SDK 57에서 지원)을 사용해 최소한
+  **OS 시스템 다크모드**에는 반응하도록 했다(라이트 기본 #F8FAFC / 시스템 다크 시 #0F172A) — 다만 이 스플래시는
+  OS의 시스템 설정만 읽고, 앱 안에서 사용자가 수동으로 고른 override(설정 탭의 "라이트"/"다크" 강제 선택)는
+  JS가 부팅되기 전이라 반영할 수 없다는 한계가 있다(문서화된 알려진 제약, `app.json` 재확인 시 참고).
+- **테마 전환 컨트롤 위치**: Admin은 로그인 화면(우상단 아이콘 버튼)과 사이드바 하단, Frontend는 워크스페이스
+  상세 화면의 "설정" 탭에 "시스템 설정/라이트/다크" 3버튼 그룹으로 넣었다 — 로그인 전 화면이 없는 Frontend
+  구조상(별도 방문자 랜딩이 없음) 로그인 후 설정 영역이 자연스러운 위치라고 판단했다.
+
+## 테스트 결과
+
+- **정적 검증**: `frontend`(`npx tsc --noEmit`, `npx expo lint`), `admin`(`npx tsc --noEmit`) 모두
+  에러/경고 없이 통과. React Compiler의 `set-state-in-effect` 규칙을 포함한 기존 lint 룰도 이번 변경으로
+  깨지지 않았다.
+- **실브라우저 확인(Playwright, 로컬 백엔드+실 Supabase 대상)**:
+  - Admin: 로그인 화면(그라디언트 로고, Pretendard, primary indigo 버튼/입력창 포커스 링) → 임시 계정을
+    실제로 회원가입시킨 뒤 SQL로 `role='ADMIN'`으로 승격해 로그인 → 대시보드(통계 카드, 폼)와 사용자 목록
+    (테이블, 상태 뱃지 — ADMIN은 primary-soft, USER/FREE는 neutral 톤)까지 다크 테마 대비/가독성을 확인했다.
+  - Frontend(Expo web, `--web` 모드 사용 시 CORS 허용 목록에 맞춰 기본 포트 8081로 기동 — 8099로 띄웠다가
+    `backend`의 `app.cors.allowed-origins`에 없어 preflight가 막히는 것을 발견하고 재기동): 로그인 화면,
+    회원가입 → 워크스페이스 목록(빈 상태, 검색창, 생성 버튼) → 새 워크스페이스 생성 폼(Card 선택 UI, 비활성
+    버튼 상태)까지 다크 테마로 정상 렌더링을 확인했다.
+  - 테스트로 만든 임시 계정 2개(Admin 승격용 1개, Frontend용 1개)는 각각 `usage_quotas`/`subscriptions`/
+    `workspaces`/`users` 순으로 삭제해 실 Supabase에 흔적을 남기지 않았다. Playwright 스크린샷/`.playwright-mcp/`
+    임시 파일도 저장소 루트에서 정리했다.
+- **라이트/다크 토글 실브라우저 확인** (Playwright, 위와 별도 세션):
+  - Admin: 로그인 화면에서 브라우저 기본(라이트) 렌더 확인 → 우상단 토글 클릭 시 즉시 다크로 전환되는 것,
+    페이지를 새로고침해도 `localStorage`에 저장된 다크가 깜빡임 없이 유지되는 것(부트스트랩 스크립트 동작
+    확인)을 스크린샷으로 검증했다.
+  - Frontend: 임시 계정으로 워크스페이스를 하나 만들고 설정 탭의 "시스템 설정/라이트/다크" 버튼을 클릭 →
+    헤더/탭/카드/위험 영역(삭제 버튼 섹션)까지 화면 전체가 즉시 다크로 전환되는 것을 확인했고, 워크스페이스
+    목록 화면으로 돌아가 새로고침해도(SecureStore/`localStorage` 재로딩 후 스플래시가 걷히는 순서로) 다크가
+    유지되며 콘솔 에러가 없는 것을 확인했다. 테스트용 계정과 워크스페이스는 종료 후 정리했다.
+- **한계**: 네이티브(iOS/Android) 빌드는 이 환경에 시뮬레이터/EAS 빌드가 없어 실물 아이콘/스플래시/adaptive
+  icon 렌더링(특히 Android의 마스크 모양별 클리핑, iOS의 폰트 family 이름 실제 값)은 검증하지 못했다 —
+  아이콘 생성 시 OS 마스크·안전영역 관례를 지켜 설계했지만, 실기기/시뮬레이터 확인은 향후 EAS 빌드 시점
+  (Phase XX)에서 필요하다. 마찬가지로 네이티브 스플래시가 앱 내 수동 테마 override를 못 따라가는 한계도
+  실기기에서 재확인이 필요하다(웹은 애초에 네이티브 스플래시가 없어 해당 없음).
+
+---
+
+# Phase 15: 기능 및 비기능 전체 점검
+
+## 작업 항목
+
+- [ ] backend를 대상으로 전체 점검
+- [ ] admin을 대상으로 전체 점검
+- [ ] frontend를 대상으로 전체 점검
+- [ ] 기능 및 비기능 점검 (보안 취약성도 추가로 점검)
+
+---
+
+# Phase 16: 문서 업데이트
+
+## 작업 항목
+
+- [ ] README.md에 누락사항 확인 후 업데이트
+- [ ] docs 디렉토리에 구현한 스키마 관련 문서 작성
+- [ ] docs 디렉토리에 구현한 사항 PPT 발표용으로 정리하여 문서 작성 (주요 기능 사용 예시도 캡쳐해서 이미지로 저장할 것)
+
+---
+
 # Phase XX: 프로덕션 릴리즈 마무리
 
 > 기본 배포 파이프라인은 Phase 01에서 이미 구축됨. 여기서는 완성된 전 기능을 실제로 얹고 최종 점검한다.

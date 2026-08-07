@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Image, StyleSheet, Text, View } from "react-native";
+import { Image, Text, View } from "react-native";
 import { Link } from "expo-router";
 import { useAuth } from "../auth/AuthContext";
 import { useGoogleAuthRequest, extractIdToken } from "../auth/google";
@@ -7,10 +7,19 @@ import { ApiError } from "../api/client";
 import { Button } from "../components/ui/Button";
 import { Field } from "../components/ui/Field";
 import { ErrorBanner } from "../components/ui/Feedback";
-import { colors, typography } from "../components/ui/theme";
+import { useTheme, useThemedStyles } from "../components/ui/ThemeContext";
+import { fontFamily } from "../components/ui/theme";
 
 export default function SignInScreen() {
   const { login, loginWithGoogle } = useAuth();
+  const { typography } = useTheme();
+  const styles = useThemedStyles((colors) => ({
+    root: { flex: 1, backgroundColor: colors.bg, alignItems: "center" as const, justifyContent: "center" as const, padding: 20 },
+    card: { width: "100%" as const, maxWidth: 380, gap: 8, alignItems: "flex-start" as const },
+    logo: { width: 44, height: 44, marginBottom: 4, borderRadius: 10 },
+    form: { width: "100%" as const, gap: 14, marginTop: 20 },
+    link: { marginTop: 20, color: colors.primary, fontSize: 13.5, fontFamily: fontFamily.semibold },
+  }));
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -79,11 +88,3 @@ export default function SignInScreen() {
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.bg, alignItems: "center", justifyContent: "center", padding: 20 },
-  card: { width: "100%", maxWidth: 380, gap: 8, alignItems: "flex-start" },
-  logo: { width: 44, height: 44, marginBottom: 4, borderRadius: 10 },
-  form: { width: "100%", gap: 14, marginTop: 20 },
-  link: { marginTop: 20, color: colors.primary, fontSize: 13.5, fontWeight: "600" },
-});

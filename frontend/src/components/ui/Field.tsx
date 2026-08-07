@@ -1,5 +1,6 @@
-import { StyleSheet, Text, TextInput, View, type TextInputProps } from "react-native";
-import { colors, radius, typography } from "./theme";
+import { Text, TextInput, View, type TextInputProps } from "react-native";
+import { useTheme, useThemedStyles } from "./ThemeContext";
+import { radius } from "./theme";
 
 interface FieldProps extends TextInputProps {
   label?: string;
@@ -7,6 +8,27 @@ interface FieldProps extends TextInputProps {
 }
 
 export function Field({ label, error, style, ...rest }: FieldProps) {
+  const { colors, typography } = useTheme();
+  const styles = useThemedStyles((colors) => ({
+    wrap: { gap: 6 },
+    input: {
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: radius.sm,
+      paddingVertical: 10,
+      paddingHorizontal: 12,
+      fontSize: 15,
+      color: colors.text,
+      backgroundColor: colors.surface,
+    },
+    inputError: {
+      borderColor: colors.danger,
+    },
+    error: {
+      fontSize: 12,
+      color: colors.danger,
+    },
+  }));
   return (
     <View style={styles.wrap}>
       {label ? <Text style={typography.label}>{label}</Text> : null}
@@ -19,24 +41,3 @@ export function Field({ label, error, style, ...rest }: FieldProps) {
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  wrap: { gap: 6 },
-  input: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.sm,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    fontSize: 15,
-    color: colors.text,
-    backgroundColor: colors.surface,
-  },
-  inputError: {
-    borderColor: colors.danger,
-  },
-  error: {
-    fontSize: 12,
-    color: colors.danger,
-  },
-});

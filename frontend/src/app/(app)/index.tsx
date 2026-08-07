@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { FlatList, Pressable, StyleSheet, Text, View } from "react-native";
+import { FlatList, Pressable, Text, View } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
 import { workspacesApi } from "../../api/workspaces";
 import { ApiError } from "../../api/client";
@@ -8,7 +8,7 @@ import { Button } from "../../components/ui/Button";
 import { Card } from "../../components/ui/Card";
 import { Field } from "../../components/ui/Field";
 import { EmptyState, ErrorBanner, Loading } from "../../components/ui/Feedback";
-import { colors, typography } from "../../components/ui/theme";
+import { useTheme, useThemedStyles } from "../../components/ui/ThemeContext";
 import type { Workspace } from "../../types";
 
 function formatDate(value: string) {
@@ -17,6 +17,13 @@ function formatDate(value: string) {
 
 export default function WorkspaceListScreen() {
   const router = useRouter();
+  const { typography } = useTheme();
+  const styles = useThemedStyles((colors) => ({
+    headerRow: { flexDirection: "row" as const, alignItems: "flex-end" as const, gap: 12, flexWrap: "wrap" as const },
+    search: { minWidth: 220, flexGrow: 1 },
+    list: { gap: 12, paddingBottom: 24 },
+    itemCard: { borderColor: colors.border },
+  }));
   const [keyword, setKeyword] = useState("");
   const [workspaces, setWorkspaces] = useState<Workspace[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -73,10 +80,3 @@ export default function WorkspaceListScreen() {
     </ScreenContainer>
   );
 }
-
-const styles = StyleSheet.create({
-  headerRow: { flexDirection: "row", alignItems: "flex-end", gap: 12, flexWrap: "wrap" },
-  search: { minWidth: 220, flexGrow: 1 },
-  list: { gap: 12, paddingBottom: 24 },
-  itemCard: { borderColor: colors.border },
-});

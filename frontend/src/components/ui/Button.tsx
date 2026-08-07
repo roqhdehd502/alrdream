@@ -1,5 +1,6 @@
 import { ActivityIndicator, Pressable, StyleSheet, Text, type StyleProp, type ViewStyle } from "react-native";
-import { colors, radius } from "./theme";
+import { useTheme, useThemedStyles } from "./ThemeContext";
+import { fontFamily, radius } from "./theme";
 
 type Variant = "primary" | "secondary" | "danger" | "ghost";
 
@@ -13,6 +14,19 @@ interface ButtonProps {
 }
 
 export function Button({ label, onPress, variant = "primary", disabled, loading, style }: ButtonProps) {
+  const { colors } = useTheme();
+  const variantStyles = useThemedStyles((colors) => ({
+    primary: { backgroundColor: colors.primary },
+    secondary: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
+    danger: { backgroundColor: colors.danger },
+    ghost: { backgroundColor: "transparent" },
+  }));
+  const textStyles = useThemedStyles((colors) => ({
+    primary: { color: "#fff" },
+    secondary: { color: colors.text },
+    danger: { color: "#fff" },
+    ghost: { color: colors.primary },
+  }));
   const isDisabled = disabled || loading;
   return (
     <Pressable
@@ -47,7 +61,7 @@ const styles = StyleSheet.create({
   },
   label: {
     fontSize: 15,
-    fontWeight: "600",
+    fontFamily: fontFamily.semibold,
   },
   disabled: {
     opacity: 0.5,
@@ -55,18 +69,4 @@ const styles = StyleSheet.create({
   pressed: {
     opacity: 0.85,
   },
-});
-
-const variantStyles = StyleSheet.create({
-  primary: { backgroundColor: colors.primary },
-  secondary: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
-  danger: { backgroundColor: colors.danger },
-  ghost: { backgroundColor: "transparent" },
-});
-
-const textStyles = StyleSheet.create({
-  primary: { color: "#fff" },
-  secondary: { color: colors.text },
-  danger: { color: "#fff" },
-  ghost: { color: colors.primary },
 });

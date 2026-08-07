@@ -1,34 +1,97 @@
+@font-face {
+  font-family: "Pretendard";
+  src: url("/fonts/Pretendard-Regular.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Pretendard";
+  src: url("/fonts/Pretendard-Medium.woff2") format("woff2");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Pretendard";
+  src: url("/fonts/Pretendard-SemiBold.woff2") format("woff2");
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Pretendard";
+  src: url("/fonts/Pretendard-Bold.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
 * {
   box-sizing: border-box;
 }
 
 :root {
-  --color-bg: #f7f6fb;
-  --color-surface: #ffffff;
-  --color-border: #e6e3ef;
-  --color-border-strong: #d7d2e6;
-  --color-text: #1c1a24;
-  --color-text-muted: #6f6b80;
-  --color-text-faint: #9b96ab;
-
-  --color-primary: #7c3aed;
-  --color-primary-hover: #6d28d9;
-  --color-primary-soft: #f2ebfe;
-  --color-accent: #2eb4e0;
-
-  --color-danger: #d9364f;
-  --color-danger-soft: #fbe7ea;
-  --color-success: #1a8f5c;
-  --color-success-soft: #e6f6ee;
-  --color-warning: #b5790a;
-  --color-warning-soft: #fbf1de;
-
   --radius-sm: 6px;
   --radius-md: 10px;
   --radius-lg: 16px;
-  --shadow-sm: 0 1px 2px rgba(28, 26, 36, 0.05);
-  --shadow-md: 0 8px 24px rgba(60, 30, 110, 0.08);
   --sidebar-width: 232px;
+}
+
+/* docs/05_color_and_font.md 기준 Indigo/Purple 브랜드 팔레트 — 라이트/다크 두 세트.
+   실제 활성 테마는 <html data-theme="light|dark">로 결정되며, 초기값은 index.html의
+   부트스트랩 스크립트가 페인트 전에 저장된 선호값(localStorage) 또는 시스템 설정으로 세팅한다. */
+:root[data-theme="light"] {
+  --color-bg: #f8fafc;
+  --color-surface: #ffffff;
+  --color-border: #e2e8f0;
+  --color-border-strong: #cbd5e1;
+  --color-text: #0f172a;
+  --color-text-muted: #64748b;
+  --color-text-faint: #94a3b8;
+
+  --color-primary: #4f46e5;
+  --color-primary-hover: #4338ca;
+  --color-primary-soft: #eef2ff;
+  --color-accent: #7c3aed;
+
+  --color-danger: #ef4444;
+  --color-danger-soft: #fee2e2;
+  --color-success: #22c55e;
+  --color-success-soft: #dcfce7;
+  --color-warning: #f59e0b;
+  --color-warning-soft: #fef3c7;
+
+  --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.06);
+  --shadow-md: 0 8px 24px rgba(15, 23, 42, 0.1);
+}
+
+:root[data-theme="dark"] {
+  --color-bg: #0f172a;
+  --color-surface: #1e293b;
+  --color-border: #334155;
+  --color-border-strong: #475569;
+  --color-text: #f1f5f9;
+  --color-text-muted: #94a3b8;
+  --color-text-faint: #64748b;
+
+  --color-primary: #4f46e5;
+  --color-primary-hover: #6366f1;
+  --color-primary-soft: rgba(99, 102, 241, 0.16);
+  --color-accent: #7c3aed;
+
+  --color-danger: #ef4444;
+  --color-danger-soft: rgba(239, 68, 68, 0.16);
+  --color-success: #22c55e;
+  --color-success-soft: rgba(34, 197, 94, 0.16);
+  --color-warning: #f59e0b;
+  --color-warning-soft: rgba(245, 158, 11, 0.16);
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.24);
+  --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.32);
 }
 
 html, body, #root {
@@ -37,10 +100,11 @@ html, body, #root {
 
 body {
   margin: 0;
-  font-family: system-ui, -apple-system, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+  font-family: "Pretendard", system-ui, -apple-system, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
   background: var(--color-bg);
   color: var(--color-text);
   -webkit-font-smoothing: antialiased;
+  transition: background-color 0.15s ease, color 0.15s ease;
 }
 
 button, input, select, textarea {
@@ -577,14 +641,36 @@ tbody tr.clickable:hover td {
   to { transform: rotate(360deg); }
 }
 
+.theme-toggle-fab {
+  position: fixed;
+  top: 18px;
+  right: 18px;
+  width: 34px;
+  height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+  cursor: pointer;
+  z-index: 5;
+}
+
+.theme-toggle-fab:hover {
+  color: var(--color-text);
+  border-color: var(--color-border-strong);
+}
+
 .login-shell {
   min-height: 100vh;
   display: flex;
   align-items: center;
   justify-content: center;
   background:
-    radial-gradient(circle at 15% 15%, rgba(124, 58, 237, 0.12), transparent 40%),
-    radial-gradient(circle at 85% 85%, rgba(46, 180, 224, 0.12), transparent 40%),
+    radial-gradient(circle at 15% 15%, rgba(79, 70, 229, 0.22), transparent 40%),
+    radial-gradient(circle at 85% 85%, rgba(124, 58, 237, 0.22), transparent 40%),
     var(--color-bg);
   padding: 16px;
 }
