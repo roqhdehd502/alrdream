@@ -54,7 +54,7 @@ export default function SignUpScreen() {
     setGoogleSubmitting(true);
     try {
       const result = await promptAsync();
-      const idToken = extractIdToken(result);
+      const idToken = extractIdToken(request, result);
       if (!idToken) {
         if (result?.type !== "cancel" && result?.type !== "dismiss") {
           setError("Google 회원가입에 실패했습니다.");

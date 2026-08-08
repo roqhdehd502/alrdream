@@ -39,10 +39,13 @@ export function DashboardPage() {
 
   useEffect(() => {
     subscriptionsApi.summary().then(setSummary).catch((e) => setError(e instanceof ApiError ? e.message : String(e)));
-    settingsApi.getFreeTierLimit().then((res) => {
-      setFreeTierLimit(res.monthlyLimit);
-      setLimitInput(String(res.monthlyLimit));
-    });
+    settingsApi
+      .getFreeTierLimit()
+      .then((res) => {
+        setFreeTierLimit(res.monthlyLimit);
+        setLimitInput(String(res.monthlyLimit));
+      })
+      .catch((e) => setError(e instanceof ApiError ? e.message : String(e)));
   }, []);
 
   useEffect(() => {
@@ -57,6 +60,14 @@ export function DashboardPage() {
   }, [statusFilter, page]);
 
   const saveLimit = async () => {
+    if (freeTierLimit === null) {
+      setLimitMessage("현재 값을 불러오지 못해 저장할 수 없습니다. 새로고침 후 다시 시도해주세요.");
+      return;
+    }
+    if (limitInput.trim() === "") {
+      setLimitMessage("0 이상의 정수를 입력해주세요.");
+      return;
+    }
     const value = Number(limitInput);
     if (!Number.isInteger(value) || value < 0) {
       setLimitMessage("0 이상의 정수를 입력해주세요.");
@@ -112,7 +123,12 @@ export function DashboardPage() {
               onChange={(e) => setLimitInput(e.target.value)}
             />
           </div>
-          <button type="button" className="btn btn-primary" onClick={saveLimit} disabled={limitSaving}>
+          <button
+            type="button"
+            className="btn btn-primary"
+            onClick={saveLimit}
+            disabled={limitSaving || freeTierLimit === null}
+          >
             {limitSaving ? "저장 중..." : "저장"}
           </button>
         </div>

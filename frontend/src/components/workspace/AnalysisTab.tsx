@@ -80,7 +80,7 @@ export function AnalysisTab({ workspaceId, planningVersionId }: { workspaceId: s
     setError(null);
     try {
       const job = await analysisApi.create(workspaceId, planningVersionId);
-      router.push({
+      router.replace({
         pathname: "/generating",
         params: { jobId: job.id, redirectTo: `/workspaces/${workspaceId}?tab=analysis` },
       });
@@ -127,7 +127,7 @@ export function AnalysisTab({ workspaceId, planningVersionId }: { workspaceId: s
     try {
       const response = await surveysApi.submit(workspaceId, "DESIGN", answers);
       const job = await designApi.create(workspaceId, planningVersionId, selected.id, response.id);
-      router.push({
+      router.replace({
         pathname: "/generating",
         params: { jobId: job.id, redirectTo: `/workspaces/${workspaceId}?tab=design` },
       });

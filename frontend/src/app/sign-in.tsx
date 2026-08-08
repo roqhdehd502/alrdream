@@ -45,7 +45,7 @@ export default function SignInScreen() {
     setGoogleSubmitting(true);
     try {
       const result = await promptAsync();
-      const idToken = extractIdToken(result);
+      const idToken = extractIdToken(request, result);
       if (!idToken) {
         if (result?.type !== "cancel" && result?.type !== "dismiss") {
           setError("Google 로그인에 실패했습니다.");

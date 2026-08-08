@@ -13,6 +13,38 @@ const SURVEY_KEYS: { key: SurveyKey; label: string }[] = [
 
 const QUESTION_TYPES: QuestionType[] = ["SINGLE_CHOICE", "MULTI_CHOICE", "SHORT_TEXT", "LONG_TEXT", "SCALE"];
 
+function validateSurvey(title: string, questions: Question[]): string | null {
+  if (title.trim() === "") return "설문 제목을 입력해주세요.";
+  if (questions.length === 0) return "문항을 최소 1개 이상 추가해주세요.";
+
+  const ids = new Set<string>();
+  const promptKeys = new Set<string>();
+  for (const q of questions) {
+    if (q.id.trim() === "") return "모든 문항의 ID를 입력해주세요.";
+    if (ids.has(q.id)) return `문항 ID가 중복되었습니다: ${q.id}`;
+    ids.add(q.id);
+
+    if (q.promptKey.trim() === "") return "모든 문항의 promptKey를 입력해주세요.";
+    if (promptKeys.has(q.promptKey)) return `promptKey가 중복되었습니다: ${q.promptKey}`;
+    promptKeys.add(q.promptKey);
+
+    if (q.question.trim() === "") return `"${q.id}" 문항의 질문 텍스트를 입력해주세요.`;
+
+    if (q.type === "SINGLE_CHOICE" || q.type === "MULTI_CHOICE") {
+      if (q.options.length === 0) return `"${q.id}" 문항은 보기를 최소 1개 이상 추가해야 합니다.`;
+      const optionKeys = new Set<string>();
+      for (const opt of q.options) {
+        if (opt.key.trim() === "" || opt.label.trim() === "") {
+          return `"${q.id}" 문항의 보기에 빈 key/label이 있습니다.`;
+        }
+        if (optionKeys.has(opt.key)) return `"${q.id}" 문항의 보기 key가 중복되었습니다: ${opt.key}`;
+        optionKeys.add(opt.key);
+      }
+    }
+  }
+  return null;
+}
+
 function emptyQuestion(): Question {
   return {
     id: "",
@@ -187,6 +219,11 @@ export function SurveyDefinitionsPage() {
   };
 
   const publish = async () => {
+    const validationError = validateSurvey(title, questions);
+    if (validationError) {
+      setPublishError(validationError);
+      return;
+    }
     setPublishing(true);
     setPublishError(null);
     try {

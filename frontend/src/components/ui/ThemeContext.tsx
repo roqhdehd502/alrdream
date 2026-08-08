@@ -100,5 +100,8 @@ export function useTheme(): ThemeContextValue {
 
 export function useThemedStyles<T extends StyleSheet.NamedStyles<T>>(factory: (colors: ThemeColors) => T): T {
   const { colors } = useTheme();
-  return StyleSheet.create(factory(colors));
+  // factory는 보통 렌더마다 새로 만들어지는 인라인 함수지만 colors만의 순수 함수이므로, colors가 바뀔 때만
+  // StyleSheet.create를 다시 호출한다(그렇지 않으면 테마가 안 바뀌어도 매 렌더 재할당된다).
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  return useMemo(() => StyleSheet.create(factory(colors)), [colors]);
 }

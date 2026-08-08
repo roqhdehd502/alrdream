@@ -16,6 +16,6 @@ export async function inferPlanningDefinition(
   ]);
   const answerIds = new Set(answers.map((a) => a.questionId));
   const hasIdeaIds = new Set(hasIdea.questions.map((q) => q.id));
-  const matchesHasIdea = [...answerIds].every((id) => hasIdeaIds.has(id));
+  const matchesHasIdea = answerIds.size > 0 && [...answerIds].every((id) => hasIdeaIds.has(id));
   return matchesHasIdea ? hasIdea : exploring;
 }

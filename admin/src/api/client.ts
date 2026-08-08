@@ -26,9 +26,19 @@ function buildHeaders(accessToken: string | null, hasBody: boolean): Headers {
 // 공유해서 한 번만 실제로 호출한다.
 let refreshInFlight: Promise<string | null> | null = null;
 
+// 로그아웃이 진행 중인 refresh 호출 도중에 일어나면(예: 401 재시도 중 사용자가 로그아웃 클릭), refresh가
+// 뒤늦게 성공해 tokenStorage에 새 토큰을 다시 채워넣어 "로그아웃했는데 새로고침하면 다시 로그인돼 있는"
+// 상태가 될 수 있다. logout()이 이 카운터를 올려 그런 뒤늦은 저장을 무시하게 한다.
+let logoutEpoch = 0;
+
+export function notifyLogout(): void {
+  logoutEpoch += 1;
+}
+
 async function refreshAccessToken(): Promise<string | null> {
   if (refreshInFlight) return refreshInFlight;
 
+  const epochAtStart = logoutEpoch;
   refreshInFlight = (async () => {
     const refreshToken = tokenStorage.getRefreshToken();
     if (!refreshToken) return null;
@@ -40,6 +50,7 @@ async function refreshAccessToken(): Promise<string | null> {
       });
       if (!res.ok) return null;
       const data: TokenResponse = await res.json();
+      if (logoutEpoch !== epochAtStart) return null;
       tokenStorage.setTokens(data.accessToken, data.refreshToken);
       return data.accessToken;
     } catch {
@@ -76,7 +87,17 @@ export async function apiFetch<T>(path: string, options: RequestInit = {}): Prom
   }
 
   const text = await res.text();
-  const data = text.length > 0 ? JSON.parse(text) : undefined;
+  let data: unknown;
+  try {
+    data = text.length > 0 ? JSON.parse(text) : undefined;
+  } catch {
+    // 프록시/로드밸런서가 JSON이 아닌 본문(예: 502/504 HTML 에러 페이지)을 반환한 경우 — 원문 대신
+    // 일관된 형식의 에러로 감싼다.
+    if (!res.ok) {
+      throw new ApiError(res.status, "UNKNOWN", `요청이 실패했습니다 (HTTP ${res.status})`);
+    }
+    data = undefined;
+  }
 
   if (!res.ok) {
     const err = data as ErrorResponse | undefined;

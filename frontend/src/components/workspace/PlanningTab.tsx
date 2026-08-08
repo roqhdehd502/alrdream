@@ -88,7 +88,7 @@ export function PlanningTab({
     try {
       const response = await surveysApi.submit(workspaceId, editDefinition.surveyKey, answers);
       const job = await planningApi.create(workspaceId, response.id);
-      router.push({ pathname: "/generating", params: { jobId: job.id, redirectTo: `/workspaces/${workspaceId}` } });
+      router.replace({ pathname: "/generating", params: { jobId: job.id, redirectTo: `/workspaces/${workspaceId}` } });
     } catch (e) {
       setDetailError(e instanceof ApiError ? e.message : "제출에 실패했습니다.");
       setBusy(false);
@@ -117,7 +117,7 @@ export function PlanningTab({
     setDetailError(null);
     try {
       const job = await analysisApi.create(workspaceId, selected.id);
-      router.push({
+      router.replace({
         pathname: "/generating",
         params: { jobId: job.id, redirectTo: `/workspaces/${workspaceId}?tab=analysis` },
       });

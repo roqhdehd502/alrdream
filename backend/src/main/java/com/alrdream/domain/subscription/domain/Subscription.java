@@ -84,4 +84,9 @@ public class Subscription extends BaseEntity {
 	public void markPastDue() {
 		this.status = SubscriptionStatus.PAST_DUE;
 	}
+
+	/** 최초 결제 요청 자체가 실패했을 때(카드사 거절 등, 돈이 실제로 오가지 않음) 호출 — 재구독 시도를 막지 않도록 정리한다. */
+	public void cancel() {
+		this.status = SubscriptionStatus.CANCELED;
+	}
 }

@@ -118,7 +118,7 @@ export function DesignTab({ workspaceId, planningVersionId }: { workspaceId: str
     try {
       const response = await surveysApi.submit(workspaceId, "DESIGN", answers);
       const job = await designApi.create(workspaceId, planningVersionId, analysisVersion.id, response.id);
-      router.push({
+      router.replace({
         pathname: "/generating",
         params: { jobId: job.id, redirectTo: `/workspaces/${workspaceId}?tab=design` },
       });
