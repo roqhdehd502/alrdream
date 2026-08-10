@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Text, type StyleProp, type ViewStyle } from "react-native";
 import { useTheme, useThemedStyles } from "./ThemeContext";
 import { fontFamily, radius } from "./theme";
@@ -10,10 +11,11 @@ interface ButtonProps {
   variant?: Variant;
   disabled?: boolean;
   loading?: boolean;
+  icon?: ReactNode;
   style?: StyleProp<ViewStyle>;
 }
 
-export function Button({ label, onPress, variant = "primary", disabled, loading, style }: ButtonProps) {
+export function Button({ label, onPress, variant = "primary", disabled, loading, icon, style }: ButtonProps) {
   const { colors } = useTheme();
   const variantStyles = useThemedStyles((colors) => ({
     primary: { backgroundColor: colors.primary },
@@ -43,7 +45,10 @@ export function Button({ label, onPress, variant = "primary", disabled, loading,
       {loading ? (
         <ActivityIndicator color={variant === "secondary" || variant === "ghost" ? colors.primary : "#fff"} />
       ) : (
-        <Text style={[styles.label, textStyles[variant]]}>{label}</Text>
+        <>
+          {icon}
+          <Text style={[styles.label, textStyles[variant]]}>{label}</Text>
+        </>
       )}
     </Pressable>
   );

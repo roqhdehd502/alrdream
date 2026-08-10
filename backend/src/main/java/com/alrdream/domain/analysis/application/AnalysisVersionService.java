@@ -20,6 +20,8 @@ import jakarta.persistence.PersistenceContext;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -83,9 +85,9 @@ public class AnalysisVersionService {
 				userId, AiTargetType.ANALYSIS, analysisVersionId, () -> generate(analysisVersionId, planningContent));
 	}
 
-	public List<AnalysisVersion> list(UUID workspaceId, UUID planningVersionId, UUID userId) {
+	public Page<AnalysisVersion> list(UUID workspaceId, UUID planningVersionId, UUID userId, Pageable pageable) {
 		planningVersionService.getOwned(planningVersionId, workspaceId, userId);
-		return analysisVersionRepository.findAllByPlanningVersionIdAndDeletedAtIsNullOrderByVersionNoDesc(planningVersionId);
+		return analysisVersionRepository.findAllByPlanningVersionIdAndDeletedAtIsNull(planningVersionId, pageable);
 	}
 
 	public AnalysisVersion getOwned(UUID analysisVersionId, UUID planningVersionId, UUID workspaceId, UUID userId) {

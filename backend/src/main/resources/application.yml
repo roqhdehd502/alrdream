@@ -34,6 +34,22 @@ spring:
       host: ${REDIS_HOST:localhost}
       port: ${REDIS_PORT:6379}
 
+  # Phase 16 — 비밀번호 재설정 코드 발송. host/port는 Gmail 고정값(비밀 아님), 계정만 env로 분리.
+  mail:
+    host: smtp.gmail.com
+    port: 587
+    username: ${GMAIL_USERNAME:}
+    password: ${GMAIL_APP_PASSWORD:}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+          connectiontimeout: 5000
+          timeout: 5000
+          writetimeout: 5000
+
 server:
   port: ${PORT:8080}
 
@@ -54,6 +70,12 @@ management:
       # Phase 12부터 Render Key Value로 배포(render.yaml) — 로그인/로그아웃이 Redis에 강하게 의존하므로
       # (RefreshTokenStore) 헬스체크에도 반영해 Redis 장애 시 healthCheckPath가 실제로 unhealthy를 반환하게 한다.
       enabled: true
+    mail:
+      # Phase 16 — spring-boot-starter-mail을 추가하면 액추에이터가 MailHealthIndicator를 자동 등록해,
+      # /actuator/health를 호출할 때마다 실제 SMTP 연결을 시도한다(느리고, GMAIL_APP_PASSWORD가 비어있으면
+      # 항상 실패). 비밀번호 재설정은 핵심 기능이 아니라 이것 때문에 render.yaml의 healthCheckPath 전체가
+      # DOWN으로 잡혀 배포가 막히면 안 되므로 끈다 — Redis(로그인 필수 의존성)와는 다르게 취급.
+      enabled: false
 
 # jwt/oauth는 Phase 03에서 실제 코드와 연동 완료. ai/storage/portone은 각 도메인 Phase(06/09/11)에서 연동 예정 —
 # 지금은 [03] 설계 문서에 맞춰 설정 슬롯만 정의해둔다.

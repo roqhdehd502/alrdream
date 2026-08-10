@@ -2,6 +2,9 @@ package com.alrdream.domain.member.application;
 
 import com.alrdream.domain.member.domain.Member;
 import com.alrdream.domain.member.domain.MemberRepository;
+import com.alrdream.domain.subscription.domain.SubscriptionRepository;
+import com.alrdream.domain.subscription.domain.SubscriptionStatus;
+import com.alrdream.global.security.RefreshTokenStore;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -14,14 +17,39 @@ import org.springframework.util.StringUtils;
 public class MemberService {
 
 	private final MemberRepository memberRepository;
+	private final SubscriptionRepository subscriptionRepository;
+	private final RefreshTokenStore refreshTokenStore;
 
-	public MemberService(MemberRepository memberRepository) {
+	public MemberService(
+			MemberRepository memberRepository,
+			SubscriptionRepository subscriptionRepository,
+			RefreshTokenStore refreshTokenStore) {
 		this.memberRepository = memberRepository;
+		this.subscriptionRepository = subscriptionRepository;
+		this.refreshTokenStore = refreshTokenStore;
 	}
 
 	public Member getById(UUID memberId) {
 		return memberRepository.findById(memberId)
 				.orElseThrow(() -> new IllegalArgumentException("존재하지 않는 회원입니다."));
+	}
+
+	/**
+	 * Phase 16 — 회원 탈퇴. subscriptions/payment_history/workspaces 등이 FK로 참조해 하드 삭제는 불가능하므로
+	 * {@link Member#withdraw()}로 개인정보만 익명화한다. 구독 중(CANCELED가 아닌 상태)이면 막는다 — 아직
+	 * 자체 구독 해지 API가 없어(별도 과제) 여기서 자동 해지까지 하면 실제 결제 예약을 PortOne에서 되돌리는
+	 * 로직까지 검증 없이 끼워 넣게 되므로, 안전하게 사용자가 먼저 해지하도록 유도한다.
+	 */
+	@Transactional
+	public void withdraw(UUID memberId) {
+		Member member = getById(memberId);
+		subscriptionRepository.findFirstByUserIdOrderByStartedAtDesc(memberId).ifPresent(subscription -> {
+			if (subscription.getStatus() != SubscriptionStatus.CANCELED) {
+				throw new IllegalArgumentException("구독 중에는 탈퇴할 수 없습니다. 구독을 먼저 해지해주세요.");
+			}
+		});
+		member.withdraw();
+		refreshTokenStore.invalidate(memberId);
 	}
 
 	/** [03] §2-1 Admin의 CS 대응용 사용자 조회 — 이메일 부분 일치 검색. */

@@ -30,6 +30,8 @@ import jakarta.persistence.PersistenceContext;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -127,9 +129,10 @@ public class DesignVersionService {
 				() -> generate(designVersionId, planningSchema, planningAnswers, analysisContent, designSchema, designAnswers));
 	}
 
-	public List<DesignVersion> list(UUID workspaceId, UUID planningVersionId, UUID analysisVersionId, UUID userId) {
+	public Page<DesignVersion> list(
+			UUID workspaceId, UUID planningVersionId, UUID analysisVersionId, UUID userId, Pageable pageable) {
 		analysisVersionService.getOwned(analysisVersionId, planningVersionId, workspaceId, userId);
-		return designVersionRepository.findAllByAnalysisVersionIdAndDeletedAtIsNullOrderByVersionNoDesc(analysisVersionId);
+		return designVersionRepository.findAllByAnalysisVersionIdAndDeletedAtIsNull(analysisVersionId, pageable);
 	}
 
 	public DesignVersion getOwned(

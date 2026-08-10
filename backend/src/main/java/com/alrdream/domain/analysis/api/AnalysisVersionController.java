@@ -16,8 +16,13 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
-import java.util.List;
 import java.util.UUID;
+import org.springdoc.core.annotations.ParameterObject;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.web.PageableDefault;
+import org.springframework.data.web.PagedModel;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -59,18 +64,19 @@ public class AnalysisVersionController {
 		return ResponseEntity.ok(AiGenerationJobResponse.of(job));
 	}
 
-	@Operation(summary = "분석 버전 목록 조회", description = "삭제되지 않은 버전을 최신순으로 조회한다 (content 미포함).")
+	@Operation(summary = "분석 버전 목록 조회", description = "삭제되지 않은 버전을 페이지 단위로 최신순 조회한다 (content 미포함).")
 	@ApiResponse(responseCode = "200", description = "조회 성공")
 	@GetMapping
-	public ResponseEntity<List<AnalysisVersionSummary>> list(
+	public ResponseEntity<PagedModel<AnalysisVersionSummary>> list(
 			@AuthenticationPrincipal MemberPrincipal principal,
 			@PathVariable UUID workspaceId,
-			@PathVariable UUID planningVersionId) {
-		List<AnalysisVersionSummary> versions =
-				analysisVersionService.list(workspaceId, planningVersionId, principal.memberId()).stream()
-						.map(AnalysisVersionSummary::of)
-						.toList();
-		return ResponseEntity.ok(versions);
+			@PathVariable UUID planningVersionId,
+			@ParameterObject
+			@PageableDefault(size = 20, sort = "versionNo", direction = Sort.Direction.DESC) Pageable pageable) {
+		Page<AnalysisVersionSummary> page = analysisVersionService
+				.list(workspaceId, planningVersionId, principal.memberId(), pageable)
+				.map(AnalysisVersionSummary::of);
+		return ResponseEntity.ok(new PagedModel<>(page));
 	}
 
 	@Operation(summary = "분석 버전 상세 조회", description = "GENERATING/FAILED면 content가 null이다.")

@@ -1,5 +1,5 @@
 import { apiClient } from "./client";
-import type { AiGenerationJob, DesignVersionDetail, DesignVersionSummary, DocumentResponse } from "../types";
+import type { AiGenerationJob, DesignVersionDetail, DesignVersionSummary, DocumentResponse, Page } from "../types";
 
 const base = (workspaceId: string, planningVersionId: string, analysisVersionId: string) =>
   `/api/workspaces/${workspaceId}/planning-versions/${planningVersionId}` +
@@ -9,7 +9,9 @@ export const designApi = {
   create: (workspaceId: string, planningVersionId: string, analysisVersionId: string, surveyResponseId: string) =>
     apiClient.post<AiGenerationJob>(base(workspaceId, planningVersionId, analysisVersionId), { surveyResponseId }),
   list: (workspaceId: string, planningVersionId: string, analysisVersionId: string) =>
-    apiClient.get<DesignVersionSummary[]>(base(workspaceId, planningVersionId, analysisVersionId)),
+    apiClient
+      .get<Page<DesignVersionSummary>>(base(workspaceId, planningVersionId, analysisVersionId), { size: 50 })
+      .then((res) => res.content),
   get: (workspaceId: string, planningVersionId: string, analysisVersionId: string, designVersionId: string) =>
     apiClient.get<DesignVersionDetail>(`${base(workspaceId, planningVersionId, analysisVersionId)}/${designVersionId}`),
   generatePdf: (workspaceId: string, planningVersionId: string, analysisVersionId: string, designVersionId: string) =>

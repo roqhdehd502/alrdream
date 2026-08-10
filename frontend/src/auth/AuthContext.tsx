@@ -13,6 +13,7 @@ interface AuthContextValue {
   signup: (email: string, password: string) => Promise<void>;
   loginWithGoogle: (idToken: string) => Promise<void>;
   logout: () => Promise<void>;
+  withdraw: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -88,9 +89,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setStatus("unauthenticated");
   }, []);
 
+  // 탈퇴는 서버에서 이미 refresh token을 무효화하므로 별도 logout 호출 없이 로컬 세션만 정리한다.
+  const withdraw = useCallback(async () => {
+    await authApi.withdraw();
+    await tokenStorage.clear();
+    setMember(null);
+    setStatus("unauthenticated");
+  }, []);
+
   const value = useMemo(
-    () => ({ status, member, login, signup, loginWithGoogle, logout }),
-    [status, member, login, signup, loginWithGoogle, logout],
+    () => ({ status, member, login, signup, loginWithGoogle, logout, withdraw }),
+    [status, member, login, signup, loginWithGoogle, logout, withdraw],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

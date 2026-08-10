@@ -13,6 +13,7 @@ import { StatusBadge } from "./StatusBadge";
 import { PdfButton } from "./PdfButton";
 import { PlanningContentView } from "./PlanningContentView";
 import { SurveyForm } from "../survey/SurveyForm";
+import { VersionDiffView } from "./VersionDiffView";
 import { inferPlanningDefinition } from "./inferPlanningSurveyKey";
 import type { PlanningVersionDetail, PlanningVersionSummary, SurveyAnswer, SurveyDefinition } from "../../types";
 
@@ -45,6 +46,15 @@ export function PlanningTab({
   const [detailError, setDetailError] = useState<string | null>(null);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [comparing, setComparing] = useState(false);
+  const [previousDetail, setPreviousDetail] = useState<PlanningVersionDetail | null>(null);
+  const [compareError, setCompareError] = useState<string | null>(null);
+
+  const previousVersion = selected
+    ? versions
+        ?.filter((v) => v.versionNo < selected.versionNo)
+        .sort((a, b) => b.versionNo - a.versionNo)[0]
+    : undefined;
 
   const [editing, setEditing] = useState(false);
   const [editDefinition, setEditDefinition] = useState<SurveyDefinition | null>(null);
@@ -55,6 +65,8 @@ export function PlanningTab({
     const load = async () => {
       setDetail(null);
       setDetailError(null);
+      setComparing(false);
+      setPreviousDetail(null);
       try {
         setDetail(await planningApi.get(workspaceId, selected.id));
       } catch (e) {
@@ -63,6 +75,23 @@ export function PlanningTab({
     };
     load();
   }, [workspaceId, selected]);
+
+  const toggleCompare = async () => {
+    if (comparing) {
+      setComparing(false);
+      return;
+    }
+    if (!previousVersion) return;
+    setComparing(true);
+    if (previousDetail?.id !== previousVersion.id) {
+      setCompareError(null);
+      try {
+        setPreviousDetail(await planningApi.get(workspaceId, previousVersion.id));
+      } catch (e) {
+        setCompareError(e instanceof ApiError ? e.message : "이전 버전을 불러오지 못했습니다.");
+      }
+    }
+  };
 
   const startEdit = async () => {
     if (!detail) return;
@@ -170,7 +199,35 @@ export function PlanningTab({
             <PdfButton onGenerate={() => planningApi.generatePdf(workspaceId, selected.id)} />
             <Button label="수정" variant="secondary" onPress={startEdit} loading={busy} />
             <Button label="이 기획으로 분석 시작" onPress={startAnalysis} loading={busy} />
+            {previousVersion && (
+              <Button
+                label={comparing ? "비교 닫기" : `v${previousVersion.versionNo}과 비교`}
+                variant="secondary"
+                onPress={toggleCompare}
+              />
+            )}
           </View>
+        )}
+
+        {comparing && (
+          <>
+            <ErrorBanner message={compareError} />
+            {previousDetail === null ? (
+              <Loading />
+            ) : previousDetail.status !== "COMPLETED" ? (
+              <EmptyState label="이전 버전이 완료 상태가 아니라 비교할 수 없습니다." />
+            ) : (
+              detail?.content &&
+              previousVersion && (
+                <VersionDiffView
+                  beforeLabel={`v${previousVersion.versionNo}`}
+                  afterLabel={`v${selected.versionNo}`}
+                  before={previousDetail.content}
+                  after={detail.content}
+                />
+              )
+            )}
+          </>
         )}
 
         {!confirmingDelete ? (

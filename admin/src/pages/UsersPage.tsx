@@ -21,14 +21,23 @@ export function UsersPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    let cancelled = false;
     setMembers(null);
     membersApi
       .list(keyword, page)
       .then((res) => {
+        if (cancelled) return;
         setMembers(res.content);
         setPageInfo({ totalPages: res.page.totalPages, totalElements: res.page.totalElements });
       })
-      .catch((e) => setError(e instanceof ApiError ? e.message : String(e)));
+      .catch((e) => {
+        if (!cancelled) setError(e instanceof ApiError ? e.message : String(e));
+      });
+    // 필터/페이지를 빠르게 바꾸면 먼저 보낸 요청이 나중에 도착해 최신 화면을 덮어쓸 수 있어(stale response),
+    // 언마운트/재실행 시 이전 요청의 결과 반영을 막는다.
+    return () => {
+      cancelled = true;
+    };
   }, [keyword, page]);
 
   return (

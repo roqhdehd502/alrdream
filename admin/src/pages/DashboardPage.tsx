@@ -1,11 +1,17 @@
 import { useEffect, useState } from "react";
 import { subscriptionsApi } from "../api/subscriptions";
 import { settingsApi } from "../api/settings";
+import { dashboardApi } from "../api/dashboard";
 import { ApiError } from "../api/client";
 import { Pagination } from "../components/Pagination";
 import { PageHeader } from "../components/PageHeader";
 import { EmptyState, ErrorAlert, Loading } from "../components/Feedback";
-import type { SubscriptionAdminResponse, SubscriptionStatus, SubscriptionSummaryResponse } from "../types";
+import type {
+  DashboardSummaryResponse,
+  SubscriptionAdminResponse,
+  SubscriptionStatus,
+  SubscriptionSummaryResponse,
+} from "../types";
 
 const STATUS_LABEL: Record<SubscriptionStatus, string> = {
   ACTIVE: "정상 결제 중",
@@ -26,6 +32,7 @@ function formatDate(value: string | null) {
 
 export function DashboardPage() {
   const [summary, setSummary] = useState<SubscriptionSummaryResponse | null>(null);
+  const [dashboardSummary, setDashboardSummary] = useState<DashboardSummaryResponse | null>(null);
   const [freeTierLimit, setFreeTierLimit] = useState<number | null>(null);
   const [limitInput, setLimitInput] = useState("");
   const [limitSaving, setLimitSaving] = useState(false);
@@ -39,6 +46,10 @@ export function DashboardPage() {
 
   useEffect(() => {
     subscriptionsApi.summary().then(setSummary).catch((e) => setError(e instanceof ApiError ? e.message : String(e)));
+    dashboardApi
+      .summary()
+      .then(setDashboardSummary)
+      .catch((e) => setError(e instanceof ApiError ? e.message : String(e)));
     settingsApi
       .getFreeTierLimit()
       .then((res) => {
@@ -49,14 +60,21 @@ export function DashboardPage() {
   }, []);
 
   useEffect(() => {
+    let cancelled = false;
     setSubscriptions(null);
     subscriptionsApi
       .list(statusFilter || undefined, page)
       .then((res) => {
+        if (cancelled) return;
         setSubscriptions(res.content);
         setPageInfo({ totalPages: res.page.totalPages, totalElements: res.page.totalElements });
       })
-      .catch((e) => setError(e instanceof ApiError ? e.message : String(e)));
+      .catch((e) => {
+        if (!cancelled) setError(e instanceof ApiError ? e.message : String(e));
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [statusFilter, page]);
 
   const saveLimit = async () => {
@@ -91,6 +109,31 @@ export function DashboardPage() {
       <PageHeader title="구독/사용량 대시보드" description="Pro 구독 현황과 FREE 플랜 월별 생성 횟수 한도를 관리합니다." />
 
       <ErrorAlert message={error} />
+
+      <div className="card-grid">
+        <div className="stat-card">
+          <div className="stat-label">전체 가입자</div>
+          <div className="stat-value">{dashboardSummary?.totalMembers ?? "-"}</div>
+        </div>
+        <div className="stat-card">
+          <div className="stat-label">FREE / PRO</div>
+          <div className="stat-value">
+            {dashboardSummary ? `${dashboardSummary.freeMembers} / ${dashboardSummary.proMembers}` : "-"}
+          </div>
+        </div>
+        <div className="stat-card">
+          <div className="stat-label">이번 달 AI 생성</div>
+          <div className="stat-value">{dashboardSummary?.generationsThisMonth ?? "-"}</div>
+        </div>
+        <div className="stat-card">
+          <div className="stat-label">이번 달 결제 성공/실패</div>
+          <div className="stat-value">
+            {dashboardSummary
+              ? `${dashboardSummary.paymentsSucceededThisMonth} / ${dashboardSummary.paymentsFailedThisMonth}`
+              : "-"}
+          </div>
+        </div>
+      </div>
 
       <div className="card-grid">
         <div className="stat-card">
@@ -132,7 +175,11 @@ export function DashboardPage() {
             {limitSaving ? "저장 중..." : "저장"}
           </button>
         </div>
-        {limitMessage && <div className="alert alert-muted">{limitMessage}</div>}
+        {limitMessage && (
+          <div className="alert alert-muted" role="status">
+            {limitMessage}
+          </div>
+        )}
       </div>
 
       <div className="toolbar">

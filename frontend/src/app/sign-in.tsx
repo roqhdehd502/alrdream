@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Image, Text, View } from "react-native";
+import { Image, Platform, Text, View } from "react-native";
 import { Link } from "expo-router";
 import { useAuth } from "../auth/AuthContext";
 import { useGoogleAuthRequest, extractIdToken } from "../auth/google";
@@ -7,7 +7,9 @@ import { ApiError } from "../api/client";
 import { Button } from "../components/ui/Button";
 import { Field } from "../components/ui/Field";
 import { ErrorBanner } from "../components/ui/Feedback";
+import { GoogleIcon } from "../components/ui/icons";
 import { useTheme, useThemedStyles } from "../components/ui/ThemeContext";
+import { ThemeMenuButton, themeMenuButtonStyles } from "../components/ui/ThemeMenuButton";
 import { fontFamily } from "../components/ui/theme";
 
 export default function SignInScreen() {
@@ -19,6 +21,7 @@ export default function SignInScreen() {
     logo: { width: 44, height: 44, marginBottom: 4, borderRadius: 10 },
     form: { width: "100%" as const, gap: 14, marginTop: 20 },
     link: { marginTop: 20, color: colors.primary, fontSize: 13.5, fontFamily: fontFamily.semibold },
+    linkSecondary: { marginTop: 10, color: colors.textMuted, fontSize: 13, fontFamily: fontFamily.medium },
   }));
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -62,6 +65,9 @@ export default function SignInScreen() {
 
   return (
     <View style={styles.root}>
+      <View style={themeMenuButtonStyles.floating}>
+        <ThemeMenuButton />
+      </View>
       <View style={styles.card}>
         <Image source={require("../../assets/images/icon.png")} style={styles.logo} />
         <Text style={typography.title}>알려드림</Text>
@@ -72,17 +78,25 @@ export default function SignInScreen() {
           <Field label="비밀번호" value={password} onChangeText={setPassword} secureTextEntry />
           <ErrorBanner message={error} />
           <Button label="로그인" onPress={handleSubmit} loading={submitting} />
-          <Button
-            label="Google로 계속하기"
-            variant="secondary"
-            onPress={handleGoogle}
-            loading={googleSubmitting}
-            disabled={!request}
-          />
+          {/* Google OAuth 클라이언트가 Web application 타입이라 https/localhost 리디렉션만 허용된다 —
+              alrdream:// 같은 커스텀 스킴은 등록 자체가 안 돼 네이티브 빌드에서는 항상 실패한다. 웹에서만 노출. */}
+          {Platform.OS === "web" && (
+            <Button
+              label="Google로 계속하기"
+              variant="secondary"
+              icon={<GoogleIcon size={18} />}
+              onPress={handleGoogle}
+              loading={googleSubmitting}
+              disabled={!request}
+            />
+          )}
         </View>
 
         <Link href="/sign-up" style={styles.link}>
           계정이 없으신가요? 회원가입
+        </Link>
+        <Link href="/forgot-password" style={styles.linkSecondary}>
+          비밀번호를 잊으셨나요?
         </Link>
       </View>
     </View>

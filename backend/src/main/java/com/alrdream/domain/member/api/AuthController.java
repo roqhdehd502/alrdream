@@ -21,6 +21,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -110,6 +111,21 @@ public class AuthController {
 	@GetMapping("/me")
 	public ResponseEntity<MemberResponse> me(@AuthenticationPrincipal MemberPrincipal principal) {
 		return ResponseEntity.ok(MemberResponse.from(memberService.getById(principal.memberId())));
+	}
+
+	@Operation(
+			summary = "회원 탈퇴",
+			description = "현재 회원을 탈퇴 처리한다. 결제 이력 등은 보존 대상이라 하드 삭제 대신 이메일 등 개인정보만 "
+					+ "익명화하고 로그인을 영구히 막는다(같은 이메일로 재가입은 가능). 구독 중(해지되지 않음)이면 실패한다.")
+	@ApiResponse(responseCode = "204", description = "탈퇴 성공")
+	@ApiResponse(responseCode = "400", description = "구독 중이라 탈퇴할 수 없음",
+			content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+	@ApiResponse(responseCode = "401", description = "인증되지 않은 요청 (access token 없음/만료)")
+	@SecurityRequirement(name = "bearerAuth")
+	@DeleteMapping("/me")
+	public ResponseEntity<Void> withdraw(@AuthenticationPrincipal MemberPrincipal principal) {
+		memberService.withdraw(principal.memberId());
+		return ResponseEntity.noContent().build();
 	}
 
 	private TokenResponse toResponse(TokenIssueResult result) {

@@ -14,9 +14,16 @@ const GOOGLE_DISCOVERY = {
  * `@react-native-google-signin/google-signin`(Expo 공식 권장)은 커스텀 네이티브 코드가 필요해 Expo Go/웹에서
  * 못 쓰므로, 대신 expo-auth-session으로 웹/Expo Go 양쪽에서 동작하는 이 방식을 쓴다. 단, Google Cloud Console에
  * 실행 환경별 redirect URI(웹 배포 도메인, Expo Go 프록시 등)가 등록돼 있어야 실제로 동작한다.
+ *
+ * `path: "redirect"`를 명시하지 않으면 웹에서는 `makeRedirectUri()`가 현재 페이지의 window.location을 그대로
+ * 쓴다 — 로그인 화면(/sign-in)과 회원가입 화면(/sign-up)에서 호출한 redirect_uri가 서로 달라지고, 배포
+ * 도메인이 바뀔 때마다도 값이 바뀌어 Google Cloud Console에 등록해야 할 URI가 계속 늘어난다. path를 고정해
+ * 화면과 무관하게 항상 동일한 한 경로로 리다이렉트되게 한다. Google이 Web application 타입 클라이언트에는
+ * https(또는 http://localhost)만 허용하므로(exp://, alrdream:// 같은 커스텀 스킴은 등록 자체가 거부됨),
+ * 이 값은 웹(로컬/배포) 환경에서만 실제로 유효하다.
  */
 export function useGoogleAuthRequest() {
-  const redirectUri = AuthSession.makeRedirectUri();
+  const redirectUri = AuthSession.makeRedirectUri({ path: "redirect" });
   return AuthSession.useAuthRequest(
     {
       clientId: process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID ?? "",

@@ -2,6 +2,8 @@ import { useFonts } from "expo-font";
 import { Stack, SplashScreen } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { AuthProvider, useAuth } from "../auth/AuthContext";
+import { JobCompletionBanner } from "../components/job/JobCompletionBanner";
+import { JobPollingProvider } from "../components/job/JobPollingContext";
 import { ThemeProvider, useTheme } from "../components/ui/ThemeContext";
 
 SplashScreen.preventAutoHideAsync();
@@ -34,6 +36,8 @@ function RootNavigator() {
       <Stack.Protected guard={!authenticated}>
         <Stack.Screen name="sign-in" />
         <Stack.Screen name="sign-up" />
+        <Stack.Screen name="forgot-password" />
+        <Stack.Screen name="reset-password" />
       </Stack.Protected>
     </Stack>
   );
@@ -43,9 +47,12 @@ function AppShell({ fontsReady }: { fontsReady: boolean }) {
   const { scheme } = useTheme();
   return (
     <AuthProvider>
-      <StatusBar style={scheme === "light" ? "dark" : "light"} />
-      <SplashScreenController fontsReady={fontsReady} />
-      <RootNavigator />
+      <JobPollingProvider>
+        <StatusBar style={scheme === "light" ? "dark" : "light"} />
+        <SplashScreenController fontsReady={fontsReady} />
+        <RootNavigator />
+        <JobCompletionBanner />
+      </JobPollingProvider>
     </AuthProvider>
   );
 }

@@ -13,6 +13,7 @@ import { StatusBadge } from "./StatusBadge";
 import { PdfButton } from "./PdfButton";
 import { AnalysisContentView } from "./AnalysisContentView";
 import { SurveyForm } from "../survey/SurveyForm";
+import { VersionDiffView } from "./VersionDiffView";
 import type { AnalysisVersionDetail, AnalysisVersionSummary, SurveyAnswer, SurveyDefinition } from "../../types";
 
 export function AnalysisTab({ workspaceId, planningVersionId }: { workspaceId: string; planningVersionId: string | null }) {
@@ -37,6 +38,14 @@ export function AnalysisTab({ workspaceId, planningVersionId }: { workspaceId: s
 
   const [startingDesign, setStartingDesign] = useState(false);
   const [designDefinition, setDesignDefinition] = useState<SurveyDefinition | null>(null);
+
+  const [comparing, setComparing] = useState(false);
+  const [previousDetail, setPreviousDetail] = useState<AnalysisVersionDetail | null>(null);
+  const [compareError, setCompareError] = useState<string | null>(null);
+
+  const previousVersion = selected
+    ? versions?.filter((v) => v.versionNo < selected.versionNo).sort((a, b) => b.versionNo - a.versionNo)[0]
+    : undefined;
 
   const reload = async () => {
     if (!planningVersionId) return;
@@ -65,6 +74,8 @@ export function AnalysisTab({ workspaceId, planningVersionId }: { workspaceId: s
     if (!selected || !planningVersionId) return;
     const load = async () => {
       setDetail(null);
+      setComparing(false);
+      setPreviousDetail(null);
       try {
         setDetail(await analysisApi.get(workspaceId, planningVersionId, selected.id));
       } catch (e) {
@@ -73,6 +84,23 @@ export function AnalysisTab({ workspaceId, planningVersionId }: { workspaceId: s
     };
     load();
   }, [workspaceId, planningVersionId, selected]);
+
+  const toggleCompare = async () => {
+    if (comparing) {
+      setComparing(false);
+      return;
+    }
+    if (!previousVersion || !planningVersionId) return;
+    setComparing(true);
+    if (previousDetail?.id !== previousVersion.id) {
+      setCompareError(null);
+      try {
+        setPreviousDetail(await analysisApi.get(workspaceId, planningVersionId, previousVersion.id));
+      } catch (e) {
+        setCompareError(e instanceof ApiError ? e.message : "이전 버전을 불러오지 못했습니다.");
+      }
+    }
+  };
 
   const runAnalysis = async () => {
     if (!planningVersionId) return;
@@ -186,7 +214,35 @@ export function AnalysisTab({ workspaceId, planningVersionId }: { workspaceId: s
           <View style={styles.actions}>
             <PdfButton onGenerate={() => analysisApi.generatePdf(workspaceId, planningVersionId, selected.id)} />
             <Button label="이 분석으로 설계 시작" onPress={openDesignSurvey} loading={busy} />
+            {previousVersion && (
+              <Button
+                label={comparing ? "비교 닫기" : `v${previousVersion.versionNo}과 비교`}
+                variant="secondary"
+                onPress={toggleCompare}
+              />
+            )}
           </View>
+        )}
+
+        {comparing && (
+          <>
+            <ErrorBanner message={compareError} />
+            {previousDetail === null ? (
+              <Loading />
+            ) : previousDetail.status !== "COMPLETED" ? (
+              <EmptyState label="이전 버전이 완료 상태가 아니라 비교할 수 없습니다." />
+            ) : (
+              detail?.content &&
+              previousVersion && (
+                <VersionDiffView
+                  beforeLabel={`v${previousVersion.versionNo}`}
+                  afterLabel={`v${selected.versionNo}`}
+                  before={previousDetail.content}
+                  after={detail.content}
+                />
+              )
+            )}
+          </>
         )}
 
         {!confirmingDelete ? (

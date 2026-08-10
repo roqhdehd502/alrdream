@@ -3,6 +3,8 @@ package com.alrdream.domain.design.domain;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface DesignVersionRepository extends JpaRepository<DesignVersion, UUID> {
@@ -10,6 +12,8 @@ public interface DesignVersionRepository extends JpaRepository<DesignVersion, UU
 	Optional<DesignVersion> findByIdAndAnalysisVersionIdAndDeletedAtIsNull(UUID id, UUID analysisVersionId);
 
 	List<DesignVersion> findAllByAnalysisVersionIdAndDeletedAtIsNullOrderByVersionNoDesc(UUID analysisVersionId);
+
+	Page<DesignVersion> findAllByAnalysisVersionIdAndDeletedAtIsNull(UUID analysisVersionId, Pageable pageable);
 
 	List<DesignVersion> findAllByIdInAndAnalysisVersionIdAndDeletedAtIsNull(List<UUID> ids, UUID analysisVersionId);
 

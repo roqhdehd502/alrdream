@@ -923,7 +923,7 @@ Playwright MCP로 `expo start --web`(포트 8081) + 로컬 백엔드(`:8080`)를
 
 ---
 
-# Phase 15: 기능 및 비기능 전체 점검
+# Phase 15: 기능 및 비기능 전체 점검 - 1
 
 ## 작업 항목
 
@@ -984,6 +984,7 @@ Playwright MCP로 `expo start --web`(포트 8081) + 로컬 백엔드(`:8080`)를
 3. **[해결됨, 부수효과] 결제 API 호출이 DB 트랜잭션 커넥션을 붙든 채 실행되던 문제** — 위 1번 수정으로
    `chargeFirstPayment`/`scheduleNextPayment`가 더 이상 `@Transactional` 메서드 안에 있지 않게 되면서
    자연히 해소됐다.
+
 - **점검했지만 문제 없었던 영역**: 워크스페이스 하위 모든 리소스(설문/설문응답/기획·분석·설계 버전/AI Job/
   PDF)의 소유권 체인 검증(라이브 IDOR 테스트로 재확인), JWT 발급/리프레시 로테이션, BCrypt 비밀번호 해시,
   Google/Apple id_token의 audience·issuer 검증, PortOne 웹훅 HMAC 서명 검증 및 "웹훅 바디의 금액을 그대로
@@ -1047,6 +1048,7 @@ Playwright MCP로 `expo start --web`(포트 8081) + 로컬 백엔드(`:8080`)를
    `inferPlanningDefinition`의 `every()`가 빈 집합에 대해 항상 `true`를 반환하는 vacuous truth 때문에,
    답변이 0개면 무조건 `PLANNING_HAS_IDEA`로 잘못 추론될 수 있었다(필수 문항이 있어 실제 발생 가능성은
    낮음). 빈 집합을 명시적으로 배제하도록 한 줄 추가.
+
 - **점검했지만 문제 없었던 영역**: Phase 14 테마 리팩터로 인한 회귀(정적 `colors`/`typography` import
   잔존 여부 등 — 없음), 동시 401에 대한 refresh 공유(경합 없음, Admin과 동일 패턴), `generating.tsx`의
   폴링 정리(언마운트 시 타이머 해제·`cancelled` 플래그 모두 정상), `PdfButton`의 `Linking.openURL`이 항상
@@ -1092,13 +1094,197 @@ Playwright MCP로 `expo start --web`(포트 8081) + 로컬 백엔드(`:8080`)를
 
 ---
 
-# Phase 16: 문서 업데이트
+# Phase 16: 후속 업데이트 - 1
+
+> Phase 15 점검에서 의도적으로 보류했던 항목 + 실제 코드베이스를 다시 훑어보며 찾은 "서비스로서 아직 비어있는
+> 자리"를 후보로 정리해 제안했고, 사용자가 "전체 다 진행"을 선택해 아래 8개 항목을 전부 실제 작업으로
+> 진행했다. 비밀번호 재설정 이메일 발송은 Gmail SMTP(앱 비밀번호)로 결정.
+
+## 작업 항목
+
+### A. Phase 15에서 보류했던 항목
+
+- [x] 기획/분석/설계 버전 목록 API 페이지네이션
+- [x] Admin 리스트 조회 화면들의 stale-response 경합
+- [x] 접근성 — `<label htmlFor>` 연결, 에러 메시지에 `role="alert"` 부여
+
+### B. 계정/보안
+
+- [x] 비밀번호 재설정 플로우 (Gmail SMTP)
+- [x] 회원 탈퇴(계정 삭제/비활성화) API + UI
+- [x] 다른 기기에서 로그아웃(전체 세션 무효화) — 확인 결과 이미 구현돼 있었음(아래 설계 결정 참고), 별도
+      코드 변경 없음
+
+### C. Admin 대시보드
+
+- [x] Admin 대시보드 실질화 — 가입자/FREE·PRO/이번 달 AI 생성/이번 달 결제 성공·실패 통계 카드 추가
+
+### D. UX 개선
+
+- [x] AI 생성 완료를 앱 밖에서도 알기 — 전역 폴링 Provider + 완료/실패 배너
+- [x] 버전 비교(diff) 뷰
+
+## 설계 결정
+
+- **버전 목록 페이지네이션**: Workspace 목록(Phase 04)과 동일한 `Pageable`/`PagedModel` 패턴을 기획/분석/
+  설계 버전 목록 API(`GET .../planning-versions` 등)에 그대로 적용했다(`@PageableDefault(size=20,
+sort="versionNo", direction=DESC)`). 다만 정렬은 항상 최신순 고정이라 Workspace처럼 사용자가 정렬 필드를
+  고를 필요가 없어 Querydsl 없이 Spring Data 파생 쿼리(`findAllBy...AndDeletedAtIsNull(id, Pageable)`)만
+  추가했다. 내부적으로 "가장 최근 완료 버전"을 찾는 기존 무페이징 메서드(`AnalysisFeatureOptionResolver`
+  등이 사용)는 그대로 남겨뒀다 — 사용자 노출 API만 페이징하고 내부 조회는 건드릴 이유가 없었다. Frontend는
+  `page=0&size=50`으로 고정 조회해 `.content`만 쓰는 방식으로 대응했다(Workspace 목록 화면도 이미 "더 보기"
+  UI 없이 같은 패턴을 쓰고 있어 일관성을 맞춤 — 신규 UI 설계를 늘리지 않았다).
+- **다른 기기 로그아웃은 이미 있었다**: `RefreshTokenStore`(Phase 03)가 애초에 "회원 1명당 refresh token
+  1개"만 저장하는 구조라, 다른 기기에서 로그인하면 `save()`가 기존 키를 덮어써 이전 기기는 자동으로
+  로그아웃된다. 즉 "전체 로그아웃" 기능은 코드 추가 없이 이미 만족돼 있었다 — 이 항목은 검증만 하고
+  종료했다.
+- **비밀번호 재설정 — OTP 코드 방식(딥링크 아님)**: Frontend가 모바일 앱(Expo)이라 이메일의 "재설정 링크"를
+  클릭했을 때 앱으로 정확히 돌아오게 하려면 딥링크(커스텀 스킴/Universal Link) 설정이 필요한데, 이 프로젝트는
+  아직 그런 설정이 없다. 대신 이메일로 6자리 숫자 코드를 보내고, 앱 안에서 코드+새 비밀번호를 직접 입력하는
+  방식을 택했다 — 딥링크 인프라 없이도 동작하고, Admin(웹)에도 동일한 API를 그대로 재사용할 수 있다.
+  `PasswordResetCodeStore`(Redis, `RefreshTokenStore`와 같은 계열)에 코드 10분 TTL로 저장, 쿨다운 60초
+  (SETNX로 원자적 처리), 5회 오답 시 코드 자동 무효화(브루트포스 방지, 6자리는 100만 경우의 수뿐이라 시도
+  횟수 제한이 필수).
+- **이메일 열거 공격 방지**: `/password-reset/request`는 계정 존재 여부·provider(LOCAL/OAuth)와 무관하게
+  항상 204를 반환한다. 쿨다운도 계정 존재 여부와 무관하게 항상 먼저 적용해, 응답 코드나 타이밍이 "이 이메일로
+  가입된 계정이 있는지"를 알려주는 사이드 채널이 되지 않게 했다. **실기동 테스트 중 이 원칙이 실제로 깨질 뻔한
+  버그를 발견해 수정했다** — 아래 "발견 및 수정" 참고.
+- **회원 탈퇴 — 하드 삭제 대신 익명화**: `users`는 `workspaces`/`subscriptions`/`payment_history` 등에서
+  FK로 참조돼 하드 삭제가 불가능하고, 결제 이력은 세무/분쟁 대응을 위해 보존해야 한다. `Member.withdraw()`가
+  이메일을 `withdrawn-{id}@deleted.local`로 바꾸고 `password_hash`/`provider_id`를 지운 뒤
+  `withdrawn_at`(신규 컬럼, `V6__add_withdrawal_to_users.sql`)을 채운다. 이메일이 바뀌므로 이후 원래
+  이메일/OAuth 계정으로는 이 행을 찾을 수 없어 로그인이 자연히 막히고(별도의 "탈퇴 여부" 검사 코드 불필요),
+  동시에 원래 이메일 주소는 즉시 재가입에 쓸 수 있게 풀린다.
+- **탈퇴 시 활성 구독이 있으면 차단**: 코드 전체를 확인한 결과 **자체 구독 해지 self-service API가 이
+  프로젝트에 아예 없다**(Admin에도 없음, `SubscriptionAdminService`는 조회만 함) — 결제 실패 롤백용
+  `SubscriptionService.cancelSubscription()`만 있는데, 이건 PortOne에 실제 결제 예약이 없는 상태에서만
+  안전하다. 탈퇴 시 활성 구독을 자동 해지하려면 PortOne 결제 스케줄 취소 API까지 새로 검증 없이 끼워 넣어야
+  해서, 실제 돈이 걸린 로직을 이번 스코프에서 무리해서 만들지 않고 "구독 중에는 탈퇴할 수 없습니다. 구독을
+  먼저 해지해주세요"로 막는 선택을 했다(많은 SaaS가 채택하는 흔한 패턴이기도 하다). **부수적으로 발견한 갭**:
+  그러면 사용자가 구독을 해지할 방법 자체가 없다는 뜻이라, 이 자체가 후속 조치가 필요한 별도 이슈다 — 아래
+  "한계"에 기록.
+- **Admin 대시보드 통계는 별도 `admin` 패키지**: 새 지표(가입자 수, AI 생성 건수, 결제 건수)가 member/ai/
+  subscription 세 도메인에 걸쳐 있어 특정 도메인 소속으로 보기 애매했다. `SubscriptionAdminService`처럼
+  기존 도메인에 억지로 얹는 대신, `domain/admin/{api,application}`이라는 새 패키지를 만들어
+  `DashboardAdminService.summary()`가 세 리포지토리를 직접 조합하게 했다.
+- **AI 생성 완료 전역 추적**: 기존엔 `generating.tsx` 화면이 폴링 타이머를 직접 소유해서, 화면 안내 문구가
+  "화면을 벗어나도 계속 진행됩니다"라고 말하면서도 실제로는 화면을 벗어나면(뒤로가기 등) 폴링이 끊겨 완료
+  여부를 알 방법이 없는 문구-동작 불일치가 있었다. 폴링을 화면 생명주기와 분리된 `JobPollingProvider`(앱
+  루트, `_layout.tsx`)로 옮기고, `generating.tsx`는 그 상태를 구독만 하도록 바꿨다. 사용자가 화면을 벗어난
+  뒤 완료/실패되면 `JobCompletionBanner`(루트에 항상 마운트, `/generating` 화면에서는 중복이라 숨김)가
+  전역으로 떠서 탭하면 결과 화면으로 이동한다. 정식 푸시 알림(`expo-notifications`)까지는 가지 않았다 —
+  앱이 백그라운드/완전 종료 상태일 때까지 알리려면 별도 패키지 설치와 서버 푸시 토큰 관리가 필요해 스코프가
+  커지고, 이번 개선의 핵심 문제(화면 이동 시 추적이 끊기는 것)는 인앱 전역 상태만으로 해결되기 때문이다.
+- **버전 비교(diff) — 스키마 무관 범용 구현**: 기획/분석/설계 세 도메인의 `content`가 서로 다른 JSON
+  스키마([01] 12-4 등)를 가지고 있어, 도메인별로 비교 UI를 각각 만드는 대신 값을 `"경로: 문자열"` 형태로
+  평탄화(`contentDiff.ts`)해 공통 `VersionDiffView`로 비교한다. 필드 라벨은 완벽한 한글화 대신
+  `idea_summary.one_line_pitch` → `idea summary > one line pitch`처럼 가벼운 가공만 했다 — 세 도메인
+  전체 필드에 대한 라벨 맵을 유지하는 비용이 이 기능의 우선순위(하) 대비 과하다고 판단했다.
+
+## 발견 및 수정 — 실기동 테스트 중 찾은 버그
+
+- **[치명, 수정] 비밀번호 재설정 요청이 이메일 존재 여부를 노출할 뻔함**: `mailService.send(...)`가 SMTP
+  인증 실패(자격증명 미설정) 등으로 예외를 던지면 `requestReset()` 전체가 그대로 예외를 던져 500이
+  났다 — 존재하지 않는 이메일/OAuth 계정은 항상 204인데, 실제 가입된 LOCAL 계정만 발송 실패 시 500이 나서
+  **응답 코드 자체가 "이 이메일로 가입된 계정이 있다"는 신호가 되는 이메일 열거 사이드 채널**이었다. 실제로
+  로컬 환경에서 `GMAIL_APP_PASSWORD`가 비어 있는 상태로 라이브 테스트하다가 그대로 재현됨 — `mailService.send`
+  호출을 try/catch로 감싸 발송 실패는 로그로만 남기고 응답은 항상 동일하게 유지하도록 수정.
+- **[중간, 수정] `/actuator/health`가 매 호출마다 실제 SMTP 연결을 시도**: `spring-boot-starter-mail`을
+  추가하자 Spring Boot Actuator가 `MailHealthIndicator`를 자동 등록해, 헬스체크를 호출할 때마다 Gmail SMTP에
+  실제로 연결을 시도했다. 로컬에서 `/actuator/health`를 반복 호출하며 재현 — 자격증명이 비어 있으면 매번
+  타임아웃에 가깝게 느려지고(로컬에서 헬스체크 응답이 아예 안 올 정도), Render 배포 시 `healthCheckPath:
+/actuator/health`(render.yaml)가 이 때문에 계속 DOWN으로 잡혀 배포 자체가 막힐 뻔한 문제였다. 비밀번호
+  재설정은 핵심 기능이 아니므로(로그인 자체를 막는 Redis와는 다르게 취급) `management.health.mail.enabled:
+false`로 껐다.
+
+## 테스트 결과
+
+- **정적 검증**: `backend`(`./gradlew compileJava`), `admin`(`npx tsc --noEmit`, `oxlint`),
+  `frontend`(`npx tsc --noEmit`, `npx expo lint`) 전부 에러 없이 통과. `frontend`는 새 라우트
+  (`account`/`forgot-password`/`reset-password`)를 인식시키기 위해 `expo start`를 한 번 띄워 Expo Router
+  타입(`​.expo/types/router.d.ts`)을 재생성한 뒤 재검증했다.
+- **`./gradlew test`(Testcontainers)는 이번엔 실행 불가**: 로컬 Docker Desktop이 꺼져 있어(`docker info`
+  실패) Testcontainers가 Postgres 컨테이너를 못 띄웠다 — 코드 문제가 아니라 이번 세션의 환경 제약. 대신
+  아래처럼 실제 Supabase에 대한 라이브 테스트로 대체 검증했다(이 프로젝트가 원래 선호하는 방식이기도 하다).
+- **라이브 백엔드 테스트**(`./gradlew bootRun`, 실제 Supabase + 로컬 Redis(Homebrew, Docker 아님)):
+  - 비밀번호 재설정: 가입 → 요청(204) → 즉시 재요청(429 `TOO_MANY_REQUESTS`) → 존재하지 않는 이메일 요청도
+    동일하게 204 → 틀린 코드로 확정 시도(400) 모두 확인. 이 과정에서 위 "이메일 열거" 버그를 실제로
+    재현·수정.
+  - 회원 탈퇴: 가입 → 탈퇴(204) → 기존 이메일/비밀번호로 로그인 시도(400, 일반 메시지) → **같은 이메일로
+    즉시 재가입 성공** 확인. 탈퇴 시점에 이미 발급돼 있던 access token은(설계대로) 만료 전까지는 여전히
+    `/me`를 통과함을 확인 — 기존 로그아웃과 동일한 JWT stateless 트레이드오프이며 새로운 문제가 아님.
+  - 버전 목록 페이지네이션: `GET .../planning-versions?page=0&size=5` 호출로 `{content, page:{size,
+number, totalElements, totalPages}}` 형태 응답 확인.
+  - Admin 대시보드 통계: 임시 계정을 ADMIN으로 승격해 `GET /api/admin/dashboard/summary` 호출,
+    `totalMembers`/`freeMembers`/`proMembers`/`generationsThisMonth`/`paymentsSucceededThisMonth`/
+    `paymentsFailedThisMonth`가 DB 실제 상태와 일치함을 확인.
+- **Admin 실브라우저 검증**(Playwright, 로컬 Vite + 실제 백엔드): 로그인 화면에서 "비밀번호를 잊으셨나요?"
+  클릭 → 이메일 입력(seed 계정 `admin@alrdream.test`) → 요청 → Redis에서 실제 코드를 직접 조회해(이메일
+  발송 자체는 자격증명 미설정으로 실패하지만 코드 저장/쿨다운/응답은 정상 동작함을 이렇게 확인) 입력 →
+  재설정 성공 → 새 비밀번호로 로그인 → 대시보드 통계 카드(전체 가입자/FREE·PRO/이번 달 생성/이번 달 결제)가
+  실제 값으로 렌더링됨을 확인. 테스트로 바뀐 seed 계정 비밀번호는 원래 해시로 복구.
+- **Frontend 실브라우저 검증**(Playwright, `expo start --web` + 실제 백엔드): `/forgot-password` 렌더
+  확인 → 신규 계정으로 요청 → `/reset-password?email=...`로 자동 이동 및 이메일 프리필 확인 → Redis에서
+  코드 조회해 입력 → 재설정 성공 → 로그인 화면 이동 → 새 비밀번호로 로그인 → 헤더 링크가 "로그아웃"에서
+  "계정"으로 바뀐 것 확인 → `/account` 진입해 이메일 표시·탈퇴 확인 플로우 확인 → 탈퇴 실행 → 자동으로
+  `/sign-in`으로 이동(세션 정리) 확인. 콘솔 에러는 로그인 전 `/me`·`/refresh` 401/400뿐으로, 세션 없는
+  상태에서의 기존 정상 동작이며 이번 변경과 무관함을 확인.
+  다만 **AI 생성 완료 전역 배너(`JobCompletionBanner`)와 버전 비교(diff) 뷰는 실제 AI 생성(수십 초~1분,
+  Claude API 비용 발생)을 거쳐야 해 이번 라이브 테스트 범위에서는 제외**했다 — 정적 검증(tsc/lint)만
+  통과했고, 코드 리뷰 수준으로만 확인했다.
+- 테스트로 생성한 계정(백엔드 curl 4개, Admin/Frontend 브라우저 각 1개)과 워크스페이스 1개, Redis의
+  `password-reset-*` 키는 전부 정리했고, Playwright 스크린샷/`.playwright-mcp/`도 정리했다.
+
+## 한계
+
+- ~~실제 이메일 발송은 검증하지 못했다~~ **(해결, 후속 검증 완료)**: 최초 작성 시점엔 `GMAIL_APP_PASSWORD`가
+  비어 있어 SMTP 인증이 항상 실패했다. 사용자가 자격증명을 채운 뒤 재검증하는 과정에서 두 가지를 발견·수정
+  했다 — (1) 앱 비밀번호를 Google이 화면에 보여주는 대로 `okcq iqrv plzx mwvw`(공백 포함)로 넣으면 그 공백이
+  그대로 SMTP 비밀번호 값에 포함돼 인증이 실패한다(공백 제거 필요), (2) `GMAIL_USERNAME`이 실제 앱 비밀번호를
+  발급받은 계정과 다른 Gmail 주소로 잘못 적혀 있었다(사용자가 직접 확인 후 정정). 두 원인을 제거한 뒤 실제
+  `bootRun`으로 재발송 테스트해 예외 없이 발송이 완료됨을 로그로 확인(이전엔 매번
+  `MailAuthenticationException`이 남았음) — Redis에 저장된 코드도 함께 확인했다. 실제 수신함 도착 자체는
+  에이전트가 메일함에 접근할 수 없어 사용자 확인이 필요하지만, SMTP 인증·발송 단계는 더 이상 실패하지 않는다.
+- **구독 해지 self-service API 부재가 새 갭으로 드러남**: 위 설계 결정에서 언급한 대로, 탈퇴가 활성 구독을
+  막는 게 정상 동작이려면 애초에 구독을 해지할 방법이 있어야 하는데 이 프로젝트엔 없다(Admin에도 없음).
+  Pro 구독자가 탈퇴하려면 현재는 막다른 길이라, 이번 phase 스코프 밖의 후속 이슈로 남긴다.
+  이메일 인증(가입 시 이메일 확인)은 여전히 다루지 않았다 — 비밀번호 재설정과 달리 없어도 서비스 운영
+  자체를 막지 않는다는 이전 판단을 유지한다.
+- **AI 생성 완료 배너/버전 비교 뷰는 실제 생성 파이프라인으로 끝까지 검증하지 못했다**: 정적 검증만
+  통과했고, 실제 Claude 호출을 거친 완료/실패 전환 및 두 버전 비교 화면 렌더링은 코드 리뷰 수준이다.
+- **`./gradlew test`(Testcontainers)는 Docker 미실행으로 이번 세션에서 실행하지 못했다** — 다음 세션에서
+  Docker Desktop을 켠 뒤 재검증 필요.
+- **Apple 로그인**은 기존 이슈(Apple Developer 자격증명)로 계속 보류 상태이며 이번 phase와 무관하다.
+
+---
+
+# Phase 17: 후속 업데이트 - 2
+
+> 현재 서비스의 UI의 퀄리티가 낮은 관계로 더욱 심미적으로 개선한다.
+
+- [ ] admin을 대상으로 전체 UI 개선
+- [ ] frontend를 대상으로 전체 UI 개선
+
+---
+
+# Phase 18: 기능 및 비기능 전체 점검 - 2
+
+## 작업 항목
+
+- [ ] backend를 대상으로 전체 점검
+- [ ] admin을 대상으로 전체 점검
+- [ ] frontend를 대상으로 전체 점검
+- [ ] 기능 및 비기능 점검 (보안 취약성도 추가로 점검)
+
+---
+
+# Phase XX: 문서 업데이트
 
 ## 작업 항목
 
 - [ ] README.md에 누락사항 확인 후 업데이트
-- [ ] docs 디렉토리에 구현한 스키마 관련 문서 작성
-- [ ] docs 디렉토리에 구현한 사항 PPT 발표용으로 정리하여 문서 작성 (주요 기능 사용 예시도 캡쳐해서 이미지로 저장할 것)
+- [ ] docs 디렉토리에 구현한 스키마 관련 md 확장자 문서 작성
+- [ ] docs 디렉토리에 구현한 사항 PPT 발표용으로 정리하여 md 확장자 문서 작성 (주요 기능 사용 예시도 캡쳐해서 이미지로 저장할 것)
 
 ---
 

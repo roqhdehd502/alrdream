@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { promptTemplatesApi } from "../api/promptTemplates";
 import { ApiError } from "../api/client";
 import { PageHeader } from "../components/PageHeader";
@@ -33,16 +33,27 @@ export function PromptTemplatesPage() {
   const [publishing, setPublishing] = useState(false);
   const [publishError, setPublishError] = useState<string | null>(null);
 
-  const loadVersions = () => {
+  // 탭(selectedType)을 빠르게 전환하면 먼저 보낸 요청이 나중에 도착해 다른 탭의 데이터를 덮어쓸 수 있어
+  // (stale response), 응답이 도착한 시점의 "현재 선택된 탭"과 요청 당시 탭이 같을 때만 반영한다.
+  const selectedTypeRef = useRef(selectedType);
+  useEffect(() => {
+    selectedTypeRef.current = selectedType;
+  }, [selectedType]);
+
+  const loadVersions = (type: AiTargetType) => {
     setVersions(null);
     promptTemplatesApi
-      .list(selectedType)
-      .then(setVersions)
-      .catch((e) => setError(e instanceof ApiError ? e.message : String(e)));
+      .list(type)
+      .then((res) => {
+        if (selectedTypeRef.current === type) setVersions(res);
+      })
+      .catch((e) => {
+        if (selectedTypeRef.current === type) setError(e instanceof ApiError ? e.message : String(e));
+      });
   };
 
   useEffect(() => {
-    loadVersions();
+    loadVersions(selectedType);
     setPreview(null);
     setEditing(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -77,7 +88,7 @@ export function PromptTemplatesPage() {
         schemaJson,
       });
       setEditing(false);
-      loadVersions();
+      loadVersions(selectedType);
     } catch (e) {
       setPublishError(e instanceof ApiError ? e.message : "발행에 실패했습니다.");
     } finally {
@@ -118,21 +129,26 @@ export function PromptTemplatesPage() {
         <div className="card">
           <div className="form-row">
             <div className="form-field">
-              <label>Tool 이름</label>
-              <input type="text" value={toolName} onChange={(e) => setToolName(e.target.value)} />
+              <label htmlFor="tool-name">Tool 이름</label>
+              <input id="tool-name" type="text" value={toolName} onChange={(e) => setToolName(e.target.value)} />
             </div>
             <div className="form-field">
-              <label>Tool 설명</label>
-              <input type="text" value={toolDescription} onChange={(e) => setToolDescription(e.target.value)} />
+              <label htmlFor="tool-description">Tool 설명</label>
+              <input
+                id="tool-description"
+                type="text"
+                value={toolDescription}
+                onChange={(e) => setToolDescription(e.target.value)}
+              />
             </div>
           </div>
           <div className="form-field">
-            <label>시스템 프롬프트</label>
-            <textarea rows={14} value={systemPrompt} onChange={(e) => setSystemPrompt(e.target.value)} />
+            <label htmlFor="system-prompt">시스템 프롬프트</label>
+            <textarea id="system-prompt" rows={14} value={systemPrompt} onChange={(e) => setSystemPrompt(e.target.value)} />
           </div>
           <div className="form-field">
-            <label>JSON Schema (Claude Tool Use input_schema)</label>
-            <textarea rows={18} value={schemaJson} onChange={(e) => setSchemaJson(e.target.value)} />
+            <label htmlFor="schema-json">JSON Schema (Claude Tool Use input_schema)</label>
+            <textarea id="schema-json" rows={18} value={schemaJson} onChange={(e) => setSchemaJson(e.target.value)} />
           </div>
 
           <ErrorAlert message={publishError} />
@@ -158,12 +174,12 @@ export function PromptTemplatesPage() {
           </div>
           <p style={{ color: "var(--color-text-muted)" }}>{preview.toolDescription}</p>
           <div className="form-field">
-            <label>시스템 프롬프트</label>
-            <textarea rows={12} readOnly value={preview.systemPrompt} />
+            <label htmlFor="preview-system-prompt">시스템 프롬프트</label>
+            <textarea id="preview-system-prompt" rows={12} readOnly value={preview.systemPrompt} />
           </div>
           <div className="form-field">
-            <label>JSON Schema</label>
-            <textarea rows={16} readOnly value={prettyJson(preview.schemaJson)} />
+            <label htmlFor="preview-schema-json">JSON Schema</label>
+            <textarea id="preview-schema-json" rows={16} readOnly value={prettyJson(preview.schemaJson)} />
           </div>
         </div>
       ) : versions === null ? (
