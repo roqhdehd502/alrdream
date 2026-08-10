@@ -10,4 +10,9 @@ export const authApi = {
     apiClient.post<TokenPair>("/api/auth/oauth/google", { idToken }, { auth: false }),
   logout: () => apiClient.post<void>("/api/auth/logout"),
   me: () => apiClient.get<Member>("/api/auth/me"),
+  withdraw: () => apiClient.delete<void>("/api/auth/me"),
+  requestPasswordReset: (email: string) =>
+    apiClient.post<void>("/api/auth/password-reset/request", { email }, { auth: false }),
+  confirmPasswordReset: (email: string, code: string, newPassword: string) =>
+    apiClient.post<void>("/api/auth/password-reset/confirm", { email, code, newPassword }, { auth: false }),
 };

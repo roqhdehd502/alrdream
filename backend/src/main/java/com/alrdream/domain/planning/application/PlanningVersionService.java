@@ -26,6 +26,8 @@ import jakarta.persistence.PersistenceContext;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -102,9 +104,9 @@ public class PlanningVersionService {
 				userId, AiTargetType.PLANNING, planningVersionId, () -> generate(planningVersionId, schema, answers));
 	}
 
-	public List<PlanningVersion> list(UUID workspaceId, UUID userId) {
+	public Page<PlanningVersion> list(UUID workspaceId, UUID userId, Pageable pageable) {
 		workspaceService.getOwned(workspaceId, userId);
-		return planningVersionRepository.findAllByWorkspaceIdAndDeletedAtIsNullOrderByVersionNoDesc(workspaceId);
+		return planningVersionRepository.findAllByWorkspaceIdAndDeletedAtIsNull(workspaceId, pageable);
 	}
 
 	public PlanningVersion getOwned(UUID versionId, UUID workspaceId, UUID userId) {

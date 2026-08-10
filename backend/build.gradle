@@ -37,6 +37,8 @@ dependencies {
 	implementation 'org.springframework.boot:spring-boot-starter-thymeleaf'
 	implementation 'org.springframework.boot:spring-boot-starter-actuator'
 	implementation 'org.springframework.boot:spring-boot-starter-security'
+	// Phase 16 — 비밀번호 재설정 코드 발송(Gmail SMTP).
+	implementation 'org.springframework.boot:spring-boot-starter-mail'
 	// 로컬 개발용 자동 재시작(hot reload) — 배포 JAR에는 포함되지 않는다(developmentOnly).
 	developmentOnly 'org.springframework.boot:spring-boot-devtools'
 	implementation 'org.flywaydb:flyway-database-postgresql'

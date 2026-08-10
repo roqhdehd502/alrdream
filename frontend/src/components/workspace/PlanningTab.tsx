@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { Text, View } from "react-native";
 import { useRouter } from "expo-router";
 import { planningApi } from "../../api/planning";
 import { surveysApi } from "../../api/surveys";
@@ -7,12 +7,13 @@ import { analysisApi } from "../../api/analysis";
 import { ApiError } from "../../api/client";
 import { Button } from "../ui/Button";
 import { EmptyState, ErrorBanner, Loading } from "../ui/Feedback";
-import { colors, typography } from "../ui/theme";
+import { useTheme, useThemedStyles } from "../ui/ThemeContext";
 import { VersionList } from "./VersionList";
 import { StatusBadge } from "./StatusBadge";
 import { PdfButton } from "./PdfButton";
 import { PlanningContentView } from "./PlanningContentView";
 import { SurveyForm } from "../survey/SurveyForm";
+import { VersionDiffView } from "./VersionDiffView";
 import { inferPlanningDefinition } from "./inferPlanningSurveyKey";
 import type { PlanningVersionDetail, PlanningVersionSummary, SurveyAnswer, SurveyDefinition } from "../../types";
 
@@ -30,11 +31,30 @@ export function PlanningTab({
   onReload: () => void;
 }) {
   const router = useRouter();
+  const { typography } = useTheme();
+  const styles = useThemedStyles((colors) => ({
+    wrap: { gap: 16 },
+    detailHeader: { flexDirection: "row" as const, alignItems: "center" as const, justifyContent: "space-between" as const },
+    backButton: { alignSelf: "flex-start" as const },
+    actions: { gap: 10 },
+    deleteLink: { alignSelf: "flex-start" as const },
+    confirmRow: { gap: 10, backgroundColor: colors.dangerSoft, padding: 14, borderRadius: 12 },
+    confirmButtons: { flexDirection: "row" as const, gap: 10 },
+  }));
   const [selected, setSelected] = useState<PlanningVersionSummary | null>(null);
   const [detail, setDetail] = useState<PlanningVersionDetail | null>(null);
   const [detailError, setDetailError] = useState<string | null>(null);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [comparing, setComparing] = useState(false);
+  const [previousDetail, setPreviousDetail] = useState<PlanningVersionDetail | null>(null);
+  const [compareError, setCompareError] = useState<string | null>(null);
+
+  const previousVersion = selected
+    ? versions
+        ?.filter((v) => v.versionNo < selected.versionNo)
+        .sort((a, b) => b.versionNo - a.versionNo)[0]
+    : undefined;
 
   const [editing, setEditing] = useState(false);
   const [editDefinition, setEditDefinition] = useState<SurveyDefinition | null>(null);
@@ -45,6 +65,8 @@ export function PlanningTab({
     const load = async () => {
       setDetail(null);
       setDetailError(null);
+      setComparing(false);
+      setPreviousDetail(null);
       try {
         setDetail(await planningApi.get(workspaceId, selected.id));
       } catch (e) {
@@ -53,6 +75,23 @@ export function PlanningTab({
     };
     load();
   }, [workspaceId, selected]);
+
+  const toggleCompare = async () => {
+    if (comparing) {
+      setComparing(false);
+      return;
+    }
+    if (!previousVersion) return;
+    setComparing(true);
+    if (previousDetail?.id !== previousVersion.id) {
+      setCompareError(null);
+      try {
+        setPreviousDetail(await planningApi.get(workspaceId, previousVersion.id));
+      } catch (e) {
+        setCompareError(e instanceof ApiError ? e.message : "이전 버전을 불러오지 못했습니다.");
+      }
+    }
+  };
 
   const startEdit = async () => {
     if (!detail) return;
@@ -78,7 +117,7 @@ export function PlanningTab({
     try {
       const response = await surveysApi.submit(workspaceId, editDefinition.surveyKey, answers);
       const job = await planningApi.create(workspaceId, response.id);
-      router.push({ pathname: "/generating", params: { jobId: job.id, redirectTo: `/workspaces/${workspaceId}` } });
+      router.replace({ pathname: "/generating", params: { jobId: job.id, redirectTo: `/workspaces/${workspaceId}` } });
     } catch (e) {
       setDetailError(e instanceof ApiError ? e.message : "제출에 실패했습니다.");
       setBusy(false);
@@ -107,7 +146,7 @@ export function PlanningTab({
     setDetailError(null);
     try {
       const job = await analysisApi.create(workspaceId, selected.id);
-      router.push({
+      router.replace({
         pathname: "/generating",
         params: { jobId: job.id, redirectTo: `/workspaces/${workspaceId}?tab=analysis` },
       });
@@ -160,7 +199,35 @@ export function PlanningTab({
             <PdfButton onGenerate={() => planningApi.generatePdf(workspaceId, selected.id)} />
             <Button label="수정" variant="secondary" onPress={startEdit} loading={busy} />
             <Button label="이 기획으로 분석 시작" onPress={startAnalysis} loading={busy} />
+            {previousVersion && (
+              <Button
+                label={comparing ? "비교 닫기" : `v${previousVersion.versionNo}과 비교`}
+                variant="secondary"
+                onPress={toggleCompare}
+              />
+            )}
           </View>
+        )}
+
+        {comparing && (
+          <>
+            <ErrorBanner message={compareError} />
+            {previousDetail === null ? (
+              <Loading />
+            ) : previousDetail.status !== "COMPLETED" ? (
+              <EmptyState label="이전 버전이 완료 상태가 아니라 비교할 수 없습니다." />
+            ) : (
+              detail?.content &&
+              previousVersion && (
+                <VersionDiffView
+                  beforeLabel={`v${previousVersion.versionNo}`}
+                  afterLabel={`v${selected.versionNo}`}
+                  before={previousDetail.content}
+                  after={detail.content}
+                />
+              )
+            )}
+          </>
         )}
 
         {!confirmingDelete ? (
@@ -191,18 +258,3 @@ export function PlanningTab({
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  wrap: { gap: 16 },
-  detailHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  backButton: { alignSelf: "flex-start" },
-  actions: { gap: 10 },
-  deleteLink: { alignSelf: "flex-start" },
-  confirmRow: {
-    gap: 10,
-    backgroundColor: colors.dangerSoft,
-    padding: 14,
-    borderRadius: 12,
-  },
-  confirmButtons: { flexDirection: "row", gap: 10 },
-});

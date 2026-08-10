@@ -20,19 +20,38 @@ export function UserDetailPage() {
 
   useEffect(() => {
     if (!userId) return;
-    membersApi.get(userId).then(setMember).catch((e) => setError(e instanceof ApiError ? e.message : String(e)));
+    let cancelled = false;
+    setMember(null);
+    membersApi
+      .get(userId)
+      .then((res) => {
+        if (!cancelled) setMember(res);
+      })
+      .catch((e) => {
+        if (!cancelled) setError(e instanceof ApiError ? e.message : String(e));
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [userId]);
 
   useEffect(() => {
     if (!userId) return;
+    let cancelled = false;
     setWorkspaces(null);
     membersApi
       .workspaces(userId, undefined, page)
       .then((res) => {
+        if (cancelled) return;
         setWorkspaces(res.content);
         setPageInfo({ totalPages: res.page.totalPages, totalElements: res.page.totalElements });
       })
-      .catch((e) => setError(e instanceof ApiError ? e.message : String(e)));
+      .catch((e) => {
+        if (!cancelled) setError(e instanceof ApiError ? e.message : String(e));
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [userId, page]);
 
   return (

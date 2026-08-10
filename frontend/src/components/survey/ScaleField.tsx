@@ -1,5 +1,6 @@
-import { Pressable, StyleSheet, Text, View } from "react-native";
-import { colors, radius } from "../ui/theme";
+import { Pressable, Text, View } from "react-native";
+import { useThemedStyles } from "../ui/ThemeContext";
+import { fontFamily, radius } from "../ui/theme";
 import { QuestionShell } from "./QuestionShell";
 import type { FieldProps } from "./fieldTypes";
 
@@ -7,6 +8,22 @@ const SCALE_VALUES = ["1", "2", "3", "4", "5"];
 
 export function ScaleField({ question, answer, onChange }: FieldProps) {
   const selected = answer.values[0];
+  const styles = useThemedStyles((colors) => ({
+    row: { flexDirection: "row" as const, gap: 10 },
+    circle: {
+      width: 42,
+      height: 42,
+      borderRadius: radius.sm,
+      borderWidth: 1,
+      borderColor: colors.border,
+      alignItems: "center" as const,
+      justifyContent: "center" as const,
+      backgroundColor: colors.surface,
+    },
+    circleActive: { backgroundColor: colors.primary, borderColor: colors.primary },
+    value: { fontSize: 15, fontFamily: fontFamily.semibold, color: colors.text },
+    valueActive: { color: "#fff" },
+  }));
   return (
     <QuestionShell
       question={question}
@@ -30,20 +47,3 @@ export function ScaleField({ question, answer, onChange }: FieldProps) {
     </QuestionShell>
   );
 }
-
-const styles = StyleSheet.create({
-  row: { flexDirection: "row", gap: 10 },
-  circle: {
-    width: 42,
-    height: 42,
-    borderRadius: radius.sm,
-    borderWidth: 1,
-    borderColor: colors.border,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: colors.surface,
-  },
-  circleActive: { backgroundColor: colors.primary, borderColor: colors.primary },
-  value: { fontSize: 15, fontWeight: "600", color: colors.text },
-  valueActive: { color: "#fff" },
-});

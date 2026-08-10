@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { Text, View } from "react-native";
 import { useRouter } from "expo-router";
 import { analysisApi } from "../../api/analysis";
 import { surveysApi } from "../../api/surveys";
@@ -7,16 +7,28 @@ import { designApi } from "../../api/design";
 import { ApiError } from "../../api/client";
 import { Button } from "../ui/Button";
 import { EmptyState, ErrorBanner, Loading } from "../ui/Feedback";
-import { colors, typography } from "../ui/theme";
+import { useTheme, useThemedStyles } from "../ui/ThemeContext";
 import { VersionList } from "./VersionList";
 import { StatusBadge } from "./StatusBadge";
 import { PdfButton } from "./PdfButton";
 import { AnalysisContentView } from "./AnalysisContentView";
 import { SurveyForm } from "../survey/SurveyForm";
+import { VersionDiffView } from "./VersionDiffView";
 import type { AnalysisVersionDetail, AnalysisVersionSummary, SurveyAnswer, SurveyDefinition } from "../../types";
 
 export function AnalysisTab({ workspaceId, planningVersionId }: { workspaceId: string; planningVersionId: string | null }) {
   const router = useRouter();
+  const { typography } = useTheme();
+  const styles = useThemedStyles((colors) => ({
+    wrap: { gap: 16 },
+    detailHeader: { flexDirection: "row" as const, alignItems: "center" as const, justifyContent: "space-between" as const },
+    backButton: { alignSelf: "flex-start" as const },
+    actions: { gap: 10 },
+    deleteLink: { alignSelf: "flex-start" as const },
+    newButton: { alignSelf: "flex-start" as const },
+    confirmRow: { gap: 10, backgroundColor: colors.dangerSoft, padding: 14, borderRadius: 12 },
+    confirmButtons: { flexDirection: "row" as const, gap: 10 },
+  }));
   const [versions, setVersions] = useState<AnalysisVersionSummary[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<AnalysisVersionSummary | null>(null);
@@ -26,6 +38,14 @@ export function AnalysisTab({ workspaceId, planningVersionId }: { workspaceId: s
 
   const [startingDesign, setStartingDesign] = useState(false);
   const [designDefinition, setDesignDefinition] = useState<SurveyDefinition | null>(null);
+
+  const [comparing, setComparing] = useState(false);
+  const [previousDetail, setPreviousDetail] = useState<AnalysisVersionDetail | null>(null);
+  const [compareError, setCompareError] = useState<string | null>(null);
+
+  const previousVersion = selected
+    ? versions?.filter((v) => v.versionNo < selected.versionNo).sort((a, b) => b.versionNo - a.versionNo)[0]
+    : undefined;
 
   const reload = async () => {
     if (!planningVersionId) return;
@@ -54,6 +74,8 @@ export function AnalysisTab({ workspaceId, planningVersionId }: { workspaceId: s
     if (!selected || !planningVersionId) return;
     const load = async () => {
       setDetail(null);
+      setComparing(false);
+      setPreviousDetail(null);
       try {
         setDetail(await analysisApi.get(workspaceId, planningVersionId, selected.id));
       } catch (e) {
@@ -63,13 +85,30 @@ export function AnalysisTab({ workspaceId, planningVersionId }: { workspaceId: s
     load();
   }, [workspaceId, planningVersionId, selected]);
 
+  const toggleCompare = async () => {
+    if (comparing) {
+      setComparing(false);
+      return;
+    }
+    if (!previousVersion || !planningVersionId) return;
+    setComparing(true);
+    if (previousDetail?.id !== previousVersion.id) {
+      setCompareError(null);
+      try {
+        setPreviousDetail(await analysisApi.get(workspaceId, planningVersionId, previousVersion.id));
+      } catch (e) {
+        setCompareError(e instanceof ApiError ? e.message : "이전 버전을 불러오지 못했습니다.");
+      }
+    }
+  };
+
   const runAnalysis = async () => {
     if (!planningVersionId) return;
     setBusy(true);
     setError(null);
     try {
       const job = await analysisApi.create(workspaceId, planningVersionId);
-      router.push({
+      router.replace({
         pathname: "/generating",
         params: { jobId: job.id, redirectTo: `/workspaces/${workspaceId}?tab=analysis` },
       });
@@ -116,7 +155,7 @@ export function AnalysisTab({ workspaceId, planningVersionId }: { workspaceId: s
     try {
       const response = await surveysApi.submit(workspaceId, "DESIGN", answers);
       const job = await designApi.create(workspaceId, planningVersionId, selected.id, response.id);
-      router.push({
+      router.replace({
         pathname: "/generating",
         params: { jobId: job.id, redirectTo: `/workspaces/${workspaceId}?tab=design` },
       });
@@ -175,7 +214,35 @@ export function AnalysisTab({ workspaceId, planningVersionId }: { workspaceId: s
           <View style={styles.actions}>
             <PdfButton onGenerate={() => analysisApi.generatePdf(workspaceId, planningVersionId, selected.id)} />
             <Button label="이 분석으로 설계 시작" onPress={openDesignSurvey} loading={busy} />
+            {previousVersion && (
+              <Button
+                label={comparing ? "비교 닫기" : `v${previousVersion.versionNo}과 비교`}
+                variant="secondary"
+                onPress={toggleCompare}
+              />
+            )}
           </View>
+        )}
+
+        {comparing && (
+          <>
+            <ErrorBanner message={compareError} />
+            {previousDetail === null ? (
+              <Loading />
+            ) : previousDetail.status !== "COMPLETED" ? (
+              <EmptyState label="이전 버전이 완료 상태가 아니라 비교할 수 없습니다." />
+            ) : (
+              detail?.content &&
+              previousVersion && (
+                <VersionDiffView
+                  beforeLabel={`v${previousVersion.versionNo}`}
+                  afterLabel={`v${selected.versionNo}`}
+                  before={previousDetail.content}
+                  after={detail.content}
+                />
+              )
+            )}
+          </>
         )}
 
         {!confirmingDelete ? (
@@ -207,14 +274,3 @@ export function AnalysisTab({ workspaceId, planningVersionId }: { workspaceId: s
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  wrap: { gap: 16 },
-  detailHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  backButton: { alignSelf: "flex-start" },
-  actions: { gap: 10 },
-  deleteLink: { alignSelf: "flex-start" },
-  newButton: { alignSelf: "flex-start" },
-  confirmRow: { gap: 10, backgroundColor: colors.dangerSoft, padding: 14, borderRadius: 12 },
-  confirmButtons: { flexDirection: "row", gap: 10 },
-});

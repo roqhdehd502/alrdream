@@ -1,0 +1,25 @@
+name: Build frontend on push
+
+# admin(Vercel)/backend(Render)는 각각 root-directory 스코프, buildFilter로 frontend/** 변경과 무관하게
+# 재배포되지 않는다 — 여기서도 동일하게 frontend/** 변경 시에만 EAS 빌드가 트리거되도록 제한해, admin/backend/
+# docs만 고친 커밋에서 불필요하게 네이티브 빌드(EAS 무료 티어 크레딧 소모)가 도는 걸 막는다.
+on:
+  push:
+    branches: ["main"]
+    paths:
+      - "frontend/**"
+
+jobs:
+  build_android:
+    type: build
+    params:
+      platform: android
+      # eas.json에 production 프로필이 없다 — 03_design.md §6 기준 스토어 정식 출시가 아니라
+      # 내부/테스트 배포([01] 범위)라 preview(내부 배포용 APK)를 쓴다.
+      profile: preview
+
+  build_ios:
+    type: build
+    params:
+      platform: ios
+      profile: preview

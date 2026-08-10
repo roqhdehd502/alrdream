@@ -86,6 +86,13 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
     }
     stored = refreshed;
     res = await rawRequest(path, options, stored.accessToken);
+    if (res.status === 401) {
+      // 갱신된 토큰으로 재시도했는데도 401이면(예: 서버 측에서 계정이 정지/삭제됨) 세션을 완전히 정리한다 —
+      // 그냥 일반 에러로 흘려보내면 상태가 "로그인됨"으로 남아 다음 요청마다 계속 실패만 반복하게 된다.
+      await tokenStorage.clear();
+      onUnauthorized?.();
+      throw new ApiError("인증이 만료되었습니다. 다시 로그인해주세요.", 401);
+    }
   }
 
   if (res.status === 204) return undefined as T;

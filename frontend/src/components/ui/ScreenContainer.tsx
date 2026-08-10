@@ -1,6 +1,6 @@
-import { ScrollView, StyleSheet, View } from "react-native";
+import { ScrollView, View } from "react-native";
 import { useBreakpoint } from "./useBreakpoint";
-import { colors } from "./theme";
+import { useThemedStyles } from "./ThemeContext";
 
 const MAX_WIDTH = { mobile: undefined, tablet: 720, desktop: 960 } as const;
 const H_PADDING = { mobile: 16, tablet: 32, desktop: 40 } as const;
@@ -14,6 +14,12 @@ export function ScreenContainer({
   scroll?: boolean;
 }) {
   const bp = useBreakpoint();
+  const styles = useThemedStyles((colors) => ({
+    root: { flex: 1, backgroundColor: colors.bg },
+    scrollContent: { flexGrow: 1, alignItems: "stretch" as const },
+    inner: { width: "100%" as const, alignSelf: "center" as const, paddingVertical: 24, gap: 20 },
+    innerFlex: { flex: 1 },
+  }));
   const inner = (
     <View
       style={[
@@ -35,10 +41,3 @@ export function ScreenContainer({
     </ScrollView>
   );
 }
-
-const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.bg },
-  scrollContent: { flexGrow: 1, alignItems: "stretch" },
-  inner: { width: "100%", alignSelf: "center", paddingVertical: 24, gap: 20 },
-  innerFlex: { flex: 1 },
-});

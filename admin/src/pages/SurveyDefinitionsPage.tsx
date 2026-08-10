@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { surveyDefinitionsApi } from "../api/surveyDefinitions";
 import { ApiError } from "../api/client";
 import { PageHeader } from "../components/PageHeader";
@@ -13,6 +13,38 @@ const SURVEY_KEYS: { key: SurveyKey; label: string }[] = [
 
 const QUESTION_TYPES: QuestionType[] = ["SINGLE_CHOICE", "MULTI_CHOICE", "SHORT_TEXT", "LONG_TEXT", "SCALE"];
 
+function validateSurvey(title: string, questions: Question[]): string | null {
+  if (title.trim() === "") return "설문 제목을 입력해주세요.";
+  if (questions.length === 0) return "문항을 최소 1개 이상 추가해주세요.";
+
+  const ids = new Set<string>();
+  const promptKeys = new Set<string>();
+  for (const q of questions) {
+    if (q.id.trim() === "") return "모든 문항의 ID를 입력해주세요.";
+    if (ids.has(q.id)) return `문항 ID가 중복되었습니다: ${q.id}`;
+    ids.add(q.id);
+
+    if (q.promptKey.trim() === "") return "모든 문항의 promptKey를 입력해주세요.";
+    if (promptKeys.has(q.promptKey)) return `promptKey가 중복되었습니다: ${q.promptKey}`;
+    promptKeys.add(q.promptKey);
+
+    if (q.question.trim() === "") return `"${q.id}" 문항의 질문 텍스트를 입력해주세요.`;
+
+    if (q.type === "SINGLE_CHOICE" || q.type === "MULTI_CHOICE") {
+      if (q.options.length === 0) return `"${q.id}" 문항은 보기를 최소 1개 이상 추가해야 합니다.`;
+      const optionKeys = new Set<string>();
+      for (const opt of q.options) {
+        if (opt.key.trim() === "" || opt.label.trim() === "") {
+          return `"${q.id}" 문항의 보기에 빈 key/label이 있습니다.`;
+        }
+        if (optionKeys.has(opt.key)) return `"${q.id}" 문항의 보기 key가 중복되었습니다: ${opt.key}`;
+        optionKeys.add(opt.key);
+      }
+    }
+  }
+  return null;
+}
+
 function emptyQuestion(): Question {
   return {
     id: "",
@@ -26,22 +58,26 @@ function emptyQuestion(): Question {
 }
 
 function QuestionEditor({
+  index,
   question,
   onChange,
   onRemove,
 }: {
+  index: number;
   question: Question;
   onChange: (q: Question) => void;
   onRemove: () => void;
 }) {
   const needsOptions = question.type === "SINGLE_CHOICE" || question.type === "MULTI_CHOICE";
+  const idPrefix = `q-${index}`;
 
   return (
     <div className="card" style={{ marginBottom: 12 }}>
       <div className="form-row">
         <div className="form-field">
-          <label>문항 ID</label>
+          <label htmlFor={`${idPrefix}-id`}>문항 ID</label>
           <input
+            id={`${idPrefix}-id`}
             type="text"
             value={question.id}
             onChange={(e) => onChange({ ...question, id: e.target.value })}
@@ -49,8 +85,9 @@ function QuestionEditor({
           />
         </div>
         <div className="form-field">
-          <label>promptKey</label>
+          <label htmlFor={`${idPrefix}-promptkey`}>promptKey</label>
           <input
+            id={`${idPrefix}-promptkey`}
             type="text"
             value={question.promptKey}
             onChange={(e) => onChange({ ...question, promptKey: e.target.value })}
@@ -58,8 +95,9 @@ function QuestionEditor({
           />
         </div>
         <div className="form-field">
-          <label>타입</label>
+          <label htmlFor={`${idPrefix}-type`}>타입</label>
           <select
+            id={`${idPrefix}-type`}
             value={question.type}
             onChange={(e) => onChange({ ...question, type: e.target.value as QuestionType })}
           >
@@ -73,8 +111,9 @@ function QuestionEditor({
       </div>
 
       <div className="form-field">
-        <label>질문 텍스트</label>
+        <label htmlFor={`${idPrefix}-question`}>질문 텍스트</label>
         <input
+          id={`${idPrefix}-question`}
           type="text"
           value={question.question}
           onChange={(e) => onChange({ ...question, question: e.target.value })}
@@ -102,13 +141,14 @@ function QuestionEditor({
 
       {needsOptions && (
         <div className="form-field">
-          <label>보기 (key / label)</label>
+          <span className="field-heading">보기 (key / label)</span>
           {question.options.map((opt, idx) => (
             <div key={idx} className="form-row" style={{ marginBottom: 6 }}>
               <input
                 type="text"
                 value={opt.key}
                 placeholder="key"
+                aria-label={`보기 ${idx + 1} key`}
                 onChange={(e) => {
                   const options = [...question.options];
                   options[idx] = { ...options[idx], key: e.target.value };
@@ -119,6 +159,7 @@ function QuestionEditor({
                 type="text"
                 value={opt.label}
                 placeholder="label"
+                aria-label={`보기 ${idx + 1} label`}
                 onChange={(e) => {
                   const options = [...question.options];
                   options[idx] = { ...options[idx], label: e.target.value };
@@ -162,16 +203,27 @@ export function SurveyDefinitionsPage() {
   const [publishing, setPublishing] = useState(false);
   const [publishError, setPublishError] = useState<string | null>(null);
 
-  const loadVersions = () => {
+  // 탭(selectedKey)을 빠르게 전환하면 먼저 보낸 요청이 나중에 도착해 다른 탭의 데이터를 덮어쓸 수 있어
+  // (stale response), 응답이 도착한 시점의 "현재 선택된 탭"과 요청 당시 탭이 같을 때만 반영한다.
+  const selectedKeyRef = useRef(selectedKey);
+  useEffect(() => {
+    selectedKeyRef.current = selectedKey;
+  }, [selectedKey]);
+
+  const loadVersions = (key: SurveyKey) => {
     setVersions(null);
     surveyDefinitionsApi
-      .list(selectedKey)
-      .then(setVersions)
-      .catch((e) => setError(e instanceof ApiError ? e.message : String(e)));
+      .list(key)
+      .then((res) => {
+        if (selectedKeyRef.current === key) setVersions(res);
+      })
+      .catch((e) => {
+        if (selectedKeyRef.current === key) setError(e instanceof ApiError ? e.message : String(e));
+      });
   };
 
   useEffect(() => {
-    loadVersions();
+    loadVersions(selectedKey);
     setPreview(null);
     setEditing(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -187,12 +239,17 @@ export function SurveyDefinitionsPage() {
   };
 
   const publish = async () => {
+    const validationError = validateSurvey(title, questions);
+    if (validationError) {
+      setPublishError(validationError);
+      return;
+    }
     setPublishing(true);
     setPublishError(null);
     try {
       await surveyDefinitionsApi.publish({ surveyKey: selectedKey, title, questions });
       setEditing(false);
-      loadVersions();
+      loadVersions(selectedKey);
     } catch (e) {
       setPublishError(e instanceof ApiError ? e.message : "발행에 실패했습니다.");
     } finally {
@@ -232,13 +289,14 @@ export function SurveyDefinitionsPage() {
       {editing ? (
         <div className="card">
           <div className="form-field">
-            <label>설문 제목</label>
-            <input type="text" value={title} onChange={(e) => setTitle(e.target.value)} />
+            <label htmlFor="survey-title">설문 제목</label>
+            <input id="survey-title" type="text" value={title} onChange={(e) => setTitle(e.target.value)} />
           </div>
 
           {questions.map((q, idx) => (
             <QuestionEditor
               key={idx}
+              index={idx}
               question={q}
               onChange={(updated) => setQuestions(questions.map((qq, i) => (i === idx ? updated : qq)))}
               onRemove={() => setQuestions(questions.filter((_, i) => i !== idx))}

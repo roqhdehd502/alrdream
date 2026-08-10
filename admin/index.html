@@ -5,6 +5,23 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>알려드림 Admin</title>
+    <script>
+      (function () {
+        var STORAGE_KEY = "alrdream-admin-theme";
+        var theme = "dark";
+        try {
+          var stored = localStorage.getItem(STORAGE_KEY);
+          if (stored === "light" || stored === "dark") {
+            theme = stored;
+          } else if (window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches) {
+            theme = "light";
+          }
+        } catch (e) {
+          // localStorage 접근 불가(프라이빗 브라우징 등) 시 기본값(dark) 유지
+        }
+        document.documentElement.setAttribute("data-theme", theme);
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

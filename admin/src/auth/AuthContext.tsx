@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
 import { authApi } from "../api/auth";
-import { ApiError } from "../api/client";
+import { ApiError, notifyLogout } from "../api/client";
 import { tokenStorage } from "../api/tokenStorage";
 import type { MemberResponse } from "../types";
 
@@ -54,6 +54,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const logout = useCallback(() => {
+    notifyLogout();
     authApi.logout().catch(() => {
       // 로그아웃은 클라이언트 상태 정리가 핵심이라 서버 호출 실패(이미 만료된 토큰 등)는 무시한다.
     });

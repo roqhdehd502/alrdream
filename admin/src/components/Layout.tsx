@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { NavLink, Outlet } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
-import { DashboardIcon, PromptIcon, SurveyIcon, UsersIcon } from "./icons";
+import { getTheme, toggleTheme } from "../theme";
+import { DashboardIcon, MoonIcon, PromptIcon, SunIcon, SurveyIcon, UsersIcon } from "./icons";
 
 const NAV_ITEMS = [
   { to: "/dashboard", label: "대시보드", icon: DashboardIcon },
@@ -13,8 +14,10 @@ const NAV_ITEMS = [
 export function Layout() {
   const { member, logout } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [theme, setThemeState] = useState(getTheme);
 
   const closeSidebar = () => setSidebarOpen(false);
+  const handleToggleTheme = () => setThemeState(toggleTheme());
 
   return (
     <div className="app-shell">
@@ -44,6 +47,15 @@ export function Layout() {
 
         <div className="sidebar-footer">
           <div className="sidebar-user">{member?.email}</div>
+          <button
+            type="button"
+            className="btn"
+            style={{ width: "100%", marginBottom: 8 }}
+            onClick={handleToggleTheme}
+          >
+            {theme === "dark" ? <SunIcon size={15} /> : <MoonIcon size={15} />}
+            {theme === "dark" ? "라이트 모드" : "다크 모드"}
+          </button>
           <button type="button" className="btn" style={{ width: "100%" }} onClick={logout}>
             로그아웃
           </button>

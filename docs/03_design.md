@@ -180,7 +180,8 @@ Controller → UseCase → PromptBuilder → AiClient(interface) → LLM Provide
   - `users.provider`를 `LOCAL | GOOGLE | APPLE | ...`로 두어, 이후 Provider가 추가돼도 컬럼/로직 구조 변경 없이 값만 늘어나도록 설계
   - Apple 로그인은 iOS 앱스토어 심사 정책상(소셜 로그인 제공 시 Apple 로그인 필수) 요구되는 항목이라 초기부터 포함
   - (2026-08-06) Apple Developer 유료 멤버십 구독 이슈로 자격증명 발급이 막혀 Apple 로그인 활성화는 잠정 보류. 코드/스키마는 그대로 유지하고 Google 로그인만 우선 배선. iOS 앱스토어 제출 전에는 위 정책 때문에 재개 필요 (자세한 경과는 `04_milestone.md` Phase 00/06 참고)
-  - **구현 방식**: Spring Security의 OAuth2Client(브라우저 리다이렉트 기반) 대신, Frontend(Expo 모바일)가 각 provider 네이티브 SDK로 발급받은 ID 토큰을 백엔드가 검증하는 방식을 쓴다(`POST /api/auth/oauth/{google|apple}`). 모바일 앱은 서버로의 브라우저 리다이렉트가 부자연스러워, 클라이언트가 SDK로 직접 토큰을 받고 백엔드는 서명·발급자·audience만 검증하는 편이 UX·구현 모두 더 적합
+  - **구현 방식**: Spring Security의 OAuth2Client(브라우저 리다이렉트 기반) 대신, Frontend가 각 provider ID 토큰을 발급받아 백엔드가 검증하는 방식을 쓴다(`POST /api/auth/oauth/{google|apple}`) — 백엔드는 서명·발급자·audience만 검증
+    - Google은 실제로는 `expo-auth-session`(범용 브라우저 기반 OAuth, Web application 타입 클라이언트) 구현이다. Google이 Web 타입 클라이언트에는 `https://`/`http://localhost` 리디렉션만 허용하고 `alrdream://` 같은 커스텀 스킴은 등록 자체를 거부해, **현재는 웹 빌드(Vercel)에서만 Google 로그인이 동작**하고 EAS로 빌드된 네이티브 앱에서는 버튼 자체를 숨긴다. 네이티브 지원이 필요해지면 `@react-native-google-signin/google-signin`(iOS/Android 전용 OAuth 클라이언트 + EAS 개발 빌드 필요, Expo Go 불가)으로 별도 구현해야 한다
 - `role: USER | ADMIN` 클레임으로 Admin API 접근을 분리 (별도 Admin 전용 서버 없이 하나의 백엔드에서 권한만 분리)
 
 ## 4-6. PDF 생성
@@ -263,10 +264,13 @@ PG사는 **토스페이먼츠(신모듈)**, 결제 게이트웨이는 **포트�
 | ---------------- | -------------------------------- | -------------------------------------------------------------------------------------- |
 | Admin            | **Vercel**                       | Vite 정적 빌드 배포, 무료 티어                                                         |
 | Backend          | **Render**                       | Docker 컨테이너 배포, 무료 Web Service(0.1 CPU/512MB) — 프로젝트 내부 사정으로 Koyeb에서 전환 |
-| Frontend         | **EAS Build (내부/테스트 배포)** | 스토어 정식 출시 아님 — Android는 APK 내부 배포, iOS는 Ad-hoc/TestFlight 수준으로 한정 |
+| Frontend (네이티브) | **EAS Build (내부/테스트 배포)** | 스토어 정식 출시 아님 — Android는 APK 내부 배포, iOS는 Ad-hoc/TestFlight 수준으로 한정 |
+| Frontend (웹)    | **Vercel**                       | `npx expo export -p web` 정적 빌드(`frontend/vercel.json`), Admin과 동일한 무료 티어 배포. Google 로그인은 이 웹 빌드에서만 지원(§4-5 참고) |
 | Database/Storage | Supabase                         | §1/§5에서 이미 확정                                                                    |
 
-**배포 방식**: Render는 GitHub App으로 레포를 직접 watch하다가 push 시 자체적으로 빌드/배포한다 — Koyeb처럼 GitHub Actions에서 API를 호출하는 방식이 아니라, 레포 루트의 `render.yaml`(Blueprint)을 대시보드에서 한 번 연결해두면 별도 워크플로우 없이 자동 배포된다. 모노레포이므로 `buildFilter`로 `backend/**`, `database/migarations/**` 변경 시에만 배포되도록 제한한다.
+**배포 방식**: Render는 GitHub App으로 레포를 직접 watch하다가 push 시 자체적으로 빌드/배포한다 — Koyeb처럼 GitHub Actions에서 API를 호출하는 방식이 아니라, 레포 루트의 `render.yaml`(Blueprint)을 대시보드에서 한 번 연결해두면 별도 워크플로우 없이 자동 배포된다. 모노레포이므로 `buildFilter`로 `backend/**`, `database/migarations/**` 변경 시에만 배포되도록 제한한다. Vercel(Admin/Frontend 웹)도 프로젝트별 Root Directory 설정으로 동일하게 스코프된다.
+
+Frontend 네이티브 빌드(EAS)도 같은 문제가 있다 — Expo 대시보드에서 GitHub App을 연결하면 push마다 자동으로 EAS Build가 도는데, 아무 필터가 없으면 admin/backend/docs만 고친 커밋에도 불필요하게 네이티브 빌드가 돈다. EAS Workflows(`.eas/workflows/build-on-push.yml`)의 `on.push.paths: ["frontend/**"]`로 Render의 `buildFilter`와 동일하게 스코프해둔다 — `main` 브랜치 push + `frontend/**` 변경 시에만 Android/iOS preview(내부 배포용) 빌드가 트리거된다.
 
 **Render 무료 티어 고려사항**
 

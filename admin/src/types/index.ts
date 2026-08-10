@@ -101,6 +101,15 @@ export interface SubscriptionSummaryResponse {
   canceledCount: number;
 }
 
+export interface DashboardSummaryResponse {
+  totalMembers: number;
+  freeMembers: number;
+  proMembers: number;
+  generationsThisMonth: number;
+  paymentsSucceededThisMonth: number;
+  paymentsFailedThisMonth: number;
+}
+
 export interface FreeTierLimitResponse {
   monthlyLimit: number;
   updatedAt: string;

@@ -1,13 +1,10 @@
-import { useEffect, useRef, useState } from "react";
-import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
+import { useEffect } from "react";
+import { ActivityIndicator, Text, View } from "react-native";
 import { useLocalSearchParams, useRouter, type Href } from "expo-router";
-import { aiJobsApi } from "../../api/aiJobs";
-import { ApiError } from "../../api/client";
 import { Button } from "../../components/ui/Button";
-import { colors, typography } from "../../components/ui/theme";
+import { useJobPolling } from "../../components/job/JobPollingContext";
+import { useTheme, useThemedStyles } from "../../components/ui/ThemeContext";
 import type { JobStatus } from "../../types";
-
-const POLL_INTERVAL_MS = 2000;
 
 const STATUS_LABEL: Record<JobStatus, string> = {
   PENDING: "생성 대기 중",
@@ -19,40 +16,33 @@ const STATUS_LABEL: Record<JobStatus, string> = {
 export default function GeneratingScreen() {
   const router = useRouter();
   const { jobId, redirectTo } = useLocalSearchParams<{ jobId: string; workspaceId?: string; redirectTo?: string }>();
-  const [status, setStatus] = useState<JobStatus>("PENDING");
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const { colors, typography } = useTheme();
+  const styles = useThemedStyles((colors) => ({
+    root: { flex: 1, alignItems: "center" as const, justifyContent: "center" as const, gap: 12, padding: 24, backgroundColor: colors.bg },
+    status: { marginTop: 8 },
+    message: { textAlign: "center" as const },
+    backButton: { marginTop: 16 },
+  }));
+  const { job, startTracking, dismiss } = useJobPolling();
 
+  // 폴링 자체는 JobPollingProvider(앱 루트)가 소유한다 — 이 화면은 그 상태를 구독만 하고, 이 화면을
+  // 벗어나도(뒤로가기 등) 추적은 끊기지 않는다.
   useEffect(() => {
-    let cancelled = false;
-
-    const poll = async () => {
-      try {
-        const job = await aiJobsApi.get(jobId);
-        if (cancelled) return;
-        setStatus(job.status);
-        if (job.status === "COMPLETED") {
-          router.replace((redirectTo ?? "/") as Href);
-          return;
-        }
-        if (job.status === "FAILED") {
-          setErrorMessage(job.errorMessage ?? "알 수 없는 오류가 발생했습니다.");
-          return;
-        }
-        timerRef.current = setTimeout(poll, POLL_INTERVAL_MS);
-      } catch (e) {
-        if (cancelled) return;
-        setErrorMessage(e instanceof ApiError ? e.message : "상태 조회에 실패했습니다.");
-      }
-    };
-
-    poll();
-    return () => {
-      cancelled = true;
-      if (timerRef.current) clearTimeout(timerRef.current);
-    };
+    startTracking(jobId, redirectTo);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [jobId]);
+
+  const isCurrentJob = job?.jobId === jobId;
+  const status = isCurrentJob ? job.status : "PENDING";
+  const errorMessage = isCurrentJob ? job.errorMessage : null;
+
+  useEffect(() => {
+    if (isCurrentJob && job.status === "COMPLETED") {
+      dismiss();
+      router.replace((redirectTo ?? "/") as Href);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isCurrentJob, job?.status]);
 
   return (
     <View style={styles.root}>
@@ -62,7 +52,10 @@ export default function GeneratingScreen() {
           <Text style={[typography.muted, styles.message]}>{errorMessage ?? "잠시 후 다시 시도해주세요."}</Text>
           <Button
             label="워크스페이스로 돌아가기"
-            onPress={() => router.replace((redirectTo ?? "/") as Href)}
+            onPress={() => {
+              dismiss();
+              router.replace((redirectTo ?? "/") as Href);
+            }}
             style={styles.backButton}
           />
         </>
@@ -70,16 +63,9 @@ export default function GeneratingScreen() {
         <>
           <ActivityIndicator size="large" color={colors.primary} />
           <Text style={[typography.heading, styles.status]}>{STATUS_LABEL[status]}</Text>
-          <Text style={typography.muted}>보통 수십 초 정도 걸려요. 화면을 벗어나도 계속 진행됩니다.</Text>
+          <Text style={typography.muted}>보통 수십 초 정도 걸려요. 화면을 벗어나도 계속 진행되고, 완료되면 알려드려요.</Text>
         </>
       )}
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  root: { flex: 1, alignItems: "center", justifyContent: "center", gap: 12, padding: 24, backgroundColor: colors.bg },
-  status: { marginTop: 8 },
-  message: { textAlign: "center" },
-  backButton: { marginTop: 16 },
-});

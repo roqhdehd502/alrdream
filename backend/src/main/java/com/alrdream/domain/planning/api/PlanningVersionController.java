@@ -17,8 +17,13 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
-import java.util.List;
 import java.util.UUID;
+import org.springdoc.core.annotations.ParameterObject;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.web.PageableDefault;
+import org.springframework.data.web.PagedModel;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -61,15 +66,17 @@ public class PlanningVersionController {
 		return ResponseEntity.ok(AiGenerationJobResponse.of(job));
 	}
 
-	@Operation(summary = "기획안 버전 목록 조회", description = "삭제되지 않은 버전을 최신순으로 조회한다 (content 미포함).")
+	@Operation(summary = "기획안 버전 목록 조회", description = "삭제되지 않은 버전을 페이지 단위로 최신순 조회한다 (content 미포함).")
 	@ApiResponse(responseCode = "200", description = "조회 성공")
 	@GetMapping
-	public ResponseEntity<List<PlanningVersionSummary>> list(
-			@AuthenticationPrincipal MemberPrincipal principal, @PathVariable UUID workspaceId) {
-		List<PlanningVersionSummary> versions = planningVersionService.list(workspaceId, principal.memberId()).stream()
-				.map(PlanningVersionSummary::of)
-				.toList();
-		return ResponseEntity.ok(versions);
+	public ResponseEntity<PagedModel<PlanningVersionSummary>> list(
+			@AuthenticationPrincipal MemberPrincipal principal,
+			@PathVariable UUID workspaceId,
+			@ParameterObject
+			@PageableDefault(size = 20, sort = "versionNo", direction = Sort.Direction.DESC) Pageable pageable) {
+		Page<PlanningVersionSummary> page =
+				planningVersionService.list(workspaceId, principal.memberId(), pageable).map(PlanningVersionSummary::of);
+		return ResponseEntity.ok(new PagedModel<>(page));
 	}
 
 	@Operation(summary = "기획안 버전 상세 조회", description = "GENERATING/FAILED면 content가 null이다.")

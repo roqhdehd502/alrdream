@@ -75,11 +75,12 @@ public class GlobalExceptionHandler {
 				.body(new ErrorResponse("UNSUPPORTED_MEDIA_TYPE", "지원하지 않는 Content-Type입니다."));
 	}
 
-	// [01] 13번 — FREE 플랜 월별 AI 생성 횟수 한도 초과.
+	// [01] 13번 FREE 플랜 월별 AI 생성 횟수 한도 초과(code=QUOTA_EXCEEDED) 및 그 외 429 상황(예: Phase 16 비밀번호
+	// 재설정 요청 쿨다운, code=TOO_MANY_REQUESTS) 공통 처리 — 코드는 예외 생성 시점에 지정한다.
 	@ExceptionHandler(TooManyRequestsException.class)
 	public ResponseEntity<ErrorResponse> handleTooManyRequests(TooManyRequestsException e) {
 		return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
-				.body(new ErrorResponse("QUOTA_EXCEEDED", e.getMessage()));
+				.body(new ErrorResponse(e.getCode(), e.getMessage()));
 	}
 
 	@ExceptionHandler(Exception.class)

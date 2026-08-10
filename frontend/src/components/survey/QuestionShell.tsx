@@ -1,5 +1,6 @@
-import { Pressable, StyleSheet, Text, View } from "react-native";
-import { colors, radius, typography } from "../ui/theme";
+import { Pressable, Text, View } from "react-native";
+import { useTheme, useThemedStyles } from "../ui/ThemeContext";
+import { radius } from "../ui/theme";
 import type { Question, SurveyAnswer } from "../../types";
 
 export function QuestionShell({
@@ -13,6 +14,30 @@ export function QuestionShell({
   onToggleUnknown: (next: boolean) => void;
   children: React.ReactNode;
 }) {
+  const { typography } = useTheme();
+  const styles = useThemedStyles((colors) => ({
+    wrap: { gap: 10 },
+    required: { color: colors.danger },
+    unknownRow: { flexDirection: "row" as const, alignItems: "center" as const, gap: 8 },
+    checkbox: {
+      width: 18,
+      height: 18,
+      borderRadius: 4,
+      borderWidth: 1.5,
+      borderColor: colors.border,
+      backgroundColor: colors.surface,
+    },
+    checkboxChecked: { backgroundColor: colors.primary, borderColor: colors.primary },
+    unknownLabel: { fontSize: 13, color: colors.textMuted },
+    unknownNote: {
+      fontSize: 13,
+      color: colors.textFaint,
+      fontStyle: "italic" as const,
+      backgroundColor: colors.bg,
+      padding: 10,
+      borderRadius: radius.sm,
+    },
+  }));
   return (
     <View style={styles.wrap}>
       <Text style={typography.label}>
@@ -29,27 +54,3 @@ export function QuestionShell({
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  wrap: { gap: 10 },
-  required: { color: colors.danger },
-  unknownRow: { flexDirection: "row", alignItems: "center", gap: 8 },
-  checkbox: {
-    width: 18,
-    height: 18,
-    borderRadius: 4,
-    borderWidth: 1.5,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
-  },
-  checkboxChecked: { backgroundColor: colors.primary, borderColor: colors.primary },
-  unknownLabel: { fontSize: 13, color: colors.textMuted },
-  unknownNote: {
-    fontSize: 13,
-    color: colors.textFaint,
-    fontStyle: "italic",
-    backgroundColor: colors.bg,
-    padding: 10,
-    borderRadius: radius.sm,
-  },
-});

@@ -1,0 +1,38 @@
+<svg width="128" height="128" viewBox="0 0 128 128" xmlns="http://www.w3.org/2000/svg">
+
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="128" y2="128">
+      <stop offset="0%" stop-color="#4F46E5"/>
+      <stop offset="100%" stop-color="#7C3AED"/>
+    </linearGradient>
+  </defs>
+
+  <!-- 배경 -->
+  <rect width="128" height="128" rx="28" fill="url(#bg)"/>
+
+  <!-- 점들 -->
+  <circle cx="36" cy="40" r="4" fill="white">
+    <animate attributeName="cx" from="36" to="64" dur="0.6s" begin="0s" fill="freeze"/>
+    <animate attributeName="cy" from="40" to="64" dur="0.6s" begin="0s" fill="freeze"/>
+  </circle>
+
+  <circle cx="36" cy="64" r="4" fill="white">
+    <animate attributeName="cx" from="36" to="64" dur="0.6s" begin="0.1s" fill="freeze"/>
+  </circle>
+
+  <circle cx="36" cy="88" r="4" fill="white">
+    <animate attributeName="cx" from="36" to="64" dur="0.6s" begin="0.2s" fill="freeze"/>
+    <animate attributeName="cy" from="88" to="64" dur="0.6s" begin="0.2s" fill="freeze"/>
+  </circle>
+
+  <!-- 결과 박스 -->
+  <rect x="72" y="48" width="24" height="32" rx="6" fill="white" opacity="0">
+    <animate attributeName="opacity" from="0" to="1" dur="0.4s" begin="0.7s" fill="freeze"/>
+    <animate attributeName="transform" type="scale"
+      from="0.8" to="1"
+      begin="0.7s" dur="0.4s"
+      additive="sum"
+    />
+  </rect>
+
+</svg>

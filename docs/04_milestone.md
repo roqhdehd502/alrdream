@@ -790,6 +790,504 @@ Playwright MCP로 `expo start --web`(포트 8081) + 로컬 백엔드(`:8080`)를
 
 ---
 
+# Phase 14: 서비스 컨셉 디자인 변경
+
+## 작업 항목
+
+- [x] admin / frontend를 대상으로 적용
+- [x] 로고, 컬러 팔레트, 폰트를 변경 (로고는 assets/\* 참고, 컬러 팔레트 및 폰트는 05_color_and_font.md 참고)
+- [x] 라이트 테마 / 다크 테마 적용
+
+## 설계 결정
+
+- **로고 자산화**: `assets/01_app_icon.svg`(정적)·`02_app_loading.svg`(애니메이션, 최종 프레임이 01과 동일)를
+  기준으로 로컬에 rasterize 도구가 없어 `npx sharp-cli`를 즉석 설치해 PNG를 생성했다. iOS/웹 아이콘은 OS가 자체
+  마스크(둥근 모서리)를 씌우므로 **모서리가 없는 full-bleed 정사각형 + 불투명 배경**으로 별도 렌더링했고(아이콘에
+  둥근 모서리를 미리 구워 넣으면 OS 마스크와 이중으로 겹치거나 투명 모서리가 검게 나올 수 있어 회피),
+  Android adaptive icon은 foreground(글리프만, 투명 배경, 안전영역 여백 확보)·background(그라디언트만,
+  no-rounding)·monochrome(foreground 재사용) 3장으로 분리했다.
+- **Expo 앱 아이콘 설정 단순화**: 기존 `ios.icon`이 Expo 기본 템플릿의 Icon Composer 번들(`assets/expo.icon`,
+  Expo 로고 그리드)을 가리키고 있었다. SDK 57 공식 문서 확인 결과 최상위 `icon`(1024×1024 PNG) 하나로 iOS까지
+  충분히 커버되므로 `ios.icon`과 `assets/expo.icon` 디렉터리를 통째로 제거해 설정을 단순화했다. 함께 남아있던
+  기본 템플릿 잔재(`react-logo*`, `expo-badge*`, `expo-logo.png`, `tutorial-web.png`, `tabIcons/*`)도 코드
+  전체에서 미사용임을 grep으로 확인 후 삭제했다.
+- **폰트 — Pretendard 선택 및 배포 방식**: `pretendard` npm 패키지는 전체 unpack 시 약 97MB(1826개 파일)라
+  그대로 의존성으로 추가하지 않고, jsdelivr npm CDN(`cdn.jsdelivr.net/npm/pretendard@1.3.9/...`)에서 필요한
+  4개 굵기(Regular/Medium/SemiBold/Bold)만 개별 파일로 내려받았다. Admin(Vite 웹)은 `admin/public/fonts/*.woff2`로
+  자체 호스팅하고 `@font-face`로 등록(런타임에 제3자 CDN에 의존하지 않도록); Frontend(Expo)는 네이티브 빌드까지
+  고려해 `frontend/assets/fonts/*.ttf`(GitHub `alternative/` 경로의 TTF본 — OTF보다 Android 호환성이 안전)로
+  번들했다.
+- **Frontend 폰트 로딩 — config plugin 대신 `useFonts` 훅**: 처음엔 `expo-font` config plugin(`app.json`의
+  `plugins` 배열에 폰트 경로 등록)을 시도했으나, 이 방식은 **네이티브 prebuild가 있어야만 적용되고 웹에는
+  적용되지 않으며**, iOS에서는 파일명이 아니라 TTF 내부에 임베드된 실제 font family 이름이 `fontFamily` 값이
+  되어 플랫폼마다 이름이 달라질 수 있는 불확실성이 있었다(이 환경엔 시뮬레이터가 없어 실제 값을 검증할 수도
+  없었다). 대신 `expo-font`의 `useFonts({ "Pretendard-Regular": require(...), ... })` 훅을 루트 레이아웃에서
+  호출해, 우리가 지정한 이름이 그대로 웹/네이티브 공통 `fontFamily` 값이 되도록 했다 — 이 환경에서 실제로
+  구동/검증 가능한 유일한 경로이기도 하다. 폰트 로딩 완료(`loaded || error`) 전까지는 기존 스플래시 화면을
+  유지하도록 `SplashScreenController`에 `fontsReady` 조건을 추가했다.
+- **React Native의 fontWeight 한계 대응**: RN에서 커스텀 폰트를 쓰면 `fontWeight` prop이 안정적으로 굵기를
+  바꿔주지 않는다(플랫폼별로 무시되거나 폰트가 해당 굵기 face를 등록하지 않으면 무시됨). 그래서 기존에
+  `fontWeight: "600"/"700"`로 강조하던 모든 지점(Button, Badge, sign-in/sign-up 링크, 로그아웃 버튼, 헤더
+  타이틀, SingleChoice/MultiChoiceField 선택 라벨, ScaleField 값, ContentSections의 라벨/뱃지/타이틀 등
+  9개 파일)을 굵기별 파일명이 곧 family인 `fontFamily: "Pretendard-SemiBold"/"Pretendard-Bold"`로 명시
+  치환했다. `theme.ts`의 `typography` 프리셋(title/heading/body/muted/label)도 동일하게 `fontFamily`를
+  갖도록 재정의해, 대부분의 화면은 프리셋 재사용만으로 자동 적용되게 했다.
+- **컬러 팔레트 — Dark + Indigo/Purple**: `docs/05_color_and_font.md`의 토큰(bg #0F172A, surface #1E293B,
+  text #F1F5F9/#94A3B8/#64748B, primary #4F46E5, hover #6366F1, success/warning/error)을 Admin의
+  CSS 커스텀 프로퍼티(`:root`)와 Frontend의 `theme.ts` `colors` 객체 양쪽에 동일하게 반영했다. 문서에
+  명시되지 않은 `primarySoft`/`accentSoft`/danger·success·warningSoft 같은 "옅은 배경" 톤은 기존 라이트
+  테마처럼 고정 밝은 hex 대신 **다크 배경 위에서 자연스럽게 어울리도록 저투명도 rgba**(예:
+  `rgba(99, 102, 241, 0.16)`)로 새로 설계했다. `border`/`border-strong`은 문서에 없어 같은 slate 계열
+  (`#334155`/`#475569`, Tailwind slate-700/600과 동일 값)로 자체 보간했다.
+  React Native `StyleSheet`와 CSS 커스텀 프로퍼티 둘 다 `rgba()` 문자열을 그대로 지원해 별도 처리 없이
+  재사용 가능했다.
+- **Admin 로그인 화면 배경 그라디언트 보정**: 기존 `.login-shell`의 은은한 radial-gradient 글로우가 옛
+  라이트 팔레트의 teal 계열 accent(#2eb4e0)를 참조하고 있었는데, 마침 다른 쪽 글로우 색(#7c3aed)이 새
+  팔레트의 accent와 정확히 일치해 두 글로우를 새 primary(#4F46E5)/accent(#7C3AED) 조합으로 교체했다
+  (라이트/다크 두 배경 모두에서 자연스러운 저채도 워시로 보이도록 고정 opacity 사용, 배경색 자체는
+  `var(--color-bg)`라 테마 전환 시 자동으로 따라간다).
+
+### 라이트/다크 테마 토글 (최초 구현이 다크 고정이었던 것을 확장)
+
+- 최초 커밋에서는 "브랜드는 Dark 기반"이라는 05_color_and_font.md의 방향을 그대로 반영해 앱을 다크로
+  하드코딩했었다(`userInterfaceStyle: "dark"`, `StatusBar style="light"` 고정). 이후 작업 항목에
+  "라이트 테마 / 다크 테마 적용"이 추가되어, 실제로 두 테마를 전환 가능한 기능으로 확장했다.
+- **Admin(Vite/CSS)**: `:root[data-theme="light"]` / `:root[data-theme="dark"]` 두 블록으로 팔레트를
+  분리하고, 실제 활성 테마는 `<html>`의 `data-theme` 속성 하나로 결정한다. 라이트 팔레트는 기존 다크 톤을
+  그대로 반전(bg #F8FAFC, text #0F172A, muted/faint 순서도 반전)해 대비 관계를 유지했고, 화이트 배경에서는
+  `primary-soft`/`danger-soft` 등 옅은 배경 톤을 rgba 대신 고정 파스텔 hex(예: `#EEF2FF`)로 바꿔 얇은 텍스트
+  대비 저하를 피했다. `index.html`에 페인트 전에 실행되는 부트스트랩 `<script>`를 추가해 `localStorage`에
+  저장된 선호값 → 없으면 `matchMedia('(prefers-color-scheme: light)')` → 그래도 없으면 브랜드 기본값(dark)
+  순서로 `data-theme`를 세팅해 FOUC(테마 전환 시 깜빡임)를 없앴다. `src/theme.ts`(`getTheme`/`setTheme`/
+  `toggleTheme`)가 이 속성과 `localStorage`를 함께 갱신하며, 로그인 화면 우상단 플로팅 버튼과 사이드바
+  하단(로그아웃 버튼 위)에 토글 UI를 뒀다.
+- **Frontend(Expo/RN) — 핵심 난제**: React Native의 `StyleSheet.create()`는 호출 시점에 값을 굳혀버려서,
+  기존처럼 `colors`를 모듈 스코프에서 한 번 import해 쓰는 구조로는 런타임에 테마를 바꿔도 이미 생성된
+  스타일이 갱신되지 않는다. 그래서 `colors`/`typography`를 정적 export에서 걷어내고,
+  `components/ui/theme.ts`는 `lightColors`/`darkColors` 두 팔레트와 `createTypography(colors)` 팩토리만
+  제공하도록 바꿨다. 새로 만든 `components/ui/ThemeContext.tsx`가 `ThemeProvider`/`useTheme()`/
+  `useThemedStyles(factory)`를 제공하며, `useThemedStyles`는 렌더마다 `StyleSheet.create(factory(colors))`를
+  다시 호출해 스타일을 항상 현재 팔레트로 재생성한다(비용은 미미해 memo화하지 않음). **`colors`/`typography`를
+  참조하던 24개 파일 전부**(components/ui/survey/workspace 및 app 라우트)를 이 훅 기반 패턴으로 바꿨다 —
+  기계적이지만 빠짐없이 처리해야 하는 작업이라 파일마다 직접 확인했다.
+- **선호도 저장 및 우선순위**: `preference`는 `"system" | "light" | "dark"` 3단계이며 `expo-secure-store`
+  (web은 `localStorage`, tokenStorage.ts와 동일한 분기 패턴)에 저장한다. `system`일 때는 RN의
+  `useColorScheme()`이 `"light"`가 아닌 한(= `"dark"`/`null`/`"unspecified"` 전부) 다크로 판단해 Admin
+  부트스트랩 스크립트와 동일한 "명시적 라이트 선호가 아니면 다크" 기준을 유지했다.
+  `ColorSchemeName`(RN 타입, Android의 `"unspecified"` 포함)과 앱 내부 `ColorScheme`("light"|"dark") 타입이
+  달라 `resolveScheme` 함수로 변환 지점을 하나로 모았다.
+- **스플래시 화면과의 동기화**: 저장된 선호도 로딩이 비동기(SecureStore)라, 로딩 전에 화면을 그리면 시스템
+  기본값 → 저장값으로 한 번 깜빡일 수 있다. 기존에 폰트 로딩 완료까지 스플래시를 띄워두던 `fontsReady` 게이트에
+  `themeReady`(선호도 로딩 완료 여부)를 추가해, 폰트·인증 상태·테마 선호도가 모두 준비된 후에만 스플래시를
+  내리도록 했다.
+- **StatusBar/OS 크롬은 완전히 동적으로 전환은 불가**: JS 레벨(`expo-status-bar`의 `<StatusBar style=... />`,
+  헤더 배경색 등)은 `scheme`에 따라 매 렌더 반응하지만, **네이티브 스플래시 화면과 Android adaptive icon
+  배경색은 앱 번들이 빌드될 때 굳는 정적 리소스**라 앱 내 토글과 실시간으로 연동되지 않는다. 이를 위해
+  `expo-splash-screen` 플러그인의 `dark: { backgroundColor }` 옵션(SDK 57에서 지원)을 사용해 최소한
+  **OS 시스템 다크모드**에는 반응하도록 했다(라이트 기본 #F8FAFC / 시스템 다크 시 #0F172A) — 다만 이 스플래시는
+  OS의 시스템 설정만 읽고, 앱 안에서 사용자가 수동으로 고른 override(설정 탭의 "라이트"/"다크" 강제 선택)는
+  JS가 부팅되기 전이라 반영할 수 없다는 한계가 있다(문서화된 알려진 제약, `app.json` 재확인 시 참고).
+- **테마 전환 컨트롤 위치**: Admin은 로그인 화면(우상단 아이콘 버튼)과 사이드바 하단, Frontend는 워크스페이스
+  상세 화면의 "설정" 탭에 "시스템 설정/라이트/다크" 3버튼 그룹으로 넣었다 — 로그인 전 화면이 없는 Frontend
+  구조상(별도 방문자 랜딩이 없음) 로그인 후 설정 영역이 자연스러운 위치라고 판단했다.
+
+## 테스트 결과
+
+- **정적 검증**: `frontend`(`npx tsc --noEmit`, `npx expo lint`), `admin`(`npx tsc --noEmit`) 모두
+  에러/경고 없이 통과. React Compiler의 `set-state-in-effect` 규칙을 포함한 기존 lint 룰도 이번 변경으로
+  깨지지 않았다.
+- **실브라우저 확인(Playwright, 로컬 백엔드+실 Supabase 대상)**:
+  - Admin: 로그인 화면(그라디언트 로고, Pretendard, primary indigo 버튼/입력창 포커스 링) → 임시 계정을
+    실제로 회원가입시킨 뒤 SQL로 `role='ADMIN'`으로 승격해 로그인 → 대시보드(통계 카드, 폼)와 사용자 목록
+    (테이블, 상태 뱃지 — ADMIN은 primary-soft, USER/FREE는 neutral 톤)까지 다크 테마 대비/가독성을 확인했다.
+  - Frontend(Expo web, `--web` 모드 사용 시 CORS 허용 목록에 맞춰 기본 포트 8081로 기동 — 8099로 띄웠다가
+    `backend`의 `app.cors.allowed-origins`에 없어 preflight가 막히는 것을 발견하고 재기동): 로그인 화면,
+    회원가입 → 워크스페이스 목록(빈 상태, 검색창, 생성 버튼) → 새 워크스페이스 생성 폼(Card 선택 UI, 비활성
+    버튼 상태)까지 다크 테마로 정상 렌더링을 확인했다.
+  - 테스트로 만든 임시 계정 2개(Admin 승격용 1개, Frontend용 1개)는 각각 `usage_quotas`/`subscriptions`/
+    `workspaces`/`users` 순으로 삭제해 실 Supabase에 흔적을 남기지 않았다. Playwright 스크린샷/`.playwright-mcp/`
+    임시 파일도 저장소 루트에서 정리했다.
+- **라이트/다크 토글 실브라우저 확인** (Playwright, 위와 별도 세션):
+  - Admin: 로그인 화면에서 브라우저 기본(라이트) 렌더 확인 → 우상단 토글 클릭 시 즉시 다크로 전환되는 것,
+    페이지를 새로고침해도 `localStorage`에 저장된 다크가 깜빡임 없이 유지되는 것(부트스트랩 스크립트 동작
+    확인)을 스크린샷으로 검증했다.
+  - Frontend: 임시 계정으로 워크스페이스를 하나 만들고 설정 탭의 "시스템 설정/라이트/다크" 버튼을 클릭 →
+    헤더/탭/카드/위험 영역(삭제 버튼 섹션)까지 화면 전체가 즉시 다크로 전환되는 것을 확인했고, 워크스페이스
+    목록 화면으로 돌아가 새로고침해도(SecureStore/`localStorage` 재로딩 후 스플래시가 걷히는 순서로) 다크가
+    유지되며 콘솔 에러가 없는 것을 확인했다. 테스트용 계정과 워크스페이스는 종료 후 정리했다.
+- **한계**: 네이티브(iOS/Android) 빌드는 이 환경에 시뮬레이터/EAS 빌드가 없어 실물 아이콘/스플래시/adaptive
+  icon 렌더링(특히 Android의 마스크 모양별 클리핑, iOS의 폰트 family 이름 실제 값)은 검증하지 못했다 —
+  아이콘 생성 시 OS 마스크·안전영역 관례를 지켜 설계했지만, 실기기/시뮬레이터 확인은 향후 EAS 빌드 시점
+  (Phase XX)에서 필요하다. 마찬가지로 네이티브 스플래시가 앱 내 수동 테마 override를 못 따라가는 한계도
+  실기기에서 재확인이 필요하다(웹은 애초에 네이티브 스플래시가 없어 해당 없음).
+
+---
+
+# Phase 15: 기능 및 비기능 전체 점검 - 1
+
+## 작업 항목
+
+- [x] backend를 대상으로 전체 점검
+- [x] admin을 대상으로 전체 점검
+- [x] frontend를 대상으로 전체 점검
+- [x] 기능 및 비기능 점검 (보안 취약성도 추가로 점검)
+
+## 설계 결정 — 점검 방법론
+
+- **`/code-review`의 `security-review` 스킬 먼저 실행**: `origin/HEAD`가 로컬에 설정돼 있지 않아 처음엔
+  `git diff origin/HEAD...` 계산이 실패했다(`git remote set-head origin -a`로 로컬 메타데이터만 보정 — 원격에는
+  영향 없음). 이 스킬은 "현재 브랜치의 pending 변경분"만 리뷰하는 구조라, 커밋이 이미 끝난 상태(작업 트리
+  clean)에서는 `main...dev` 전체 diff(Phase 14 디자인 개편)만 훑는다 — 결과는 "고신뢰 발견 없음"이었다(테마
+  토글 관련 신규 코드는 `localStorage`/`SecureStore`에 enum 값만 저장하고 인증 경계를 건드리지 않음을 확인).
+  Phase 15가 요구하는 "backend/admin/frontend 전체 점검"에는 이 diff 스코프가 부족해, 아래처럼 범위를 넓혔다.
+- **앱별 전체 코드 감사를 백그라운드 서브에이전트 3개로 병렬 실행**: `git worktree` 격리 상태에서 backend(도메인
+  전체 — 인증/인가/PortOne 결제/입력검증/N+1/트랜잭션 경계), admin(라우트 가드/토큰 갱신/폼 검증/에러 처리/
+  접근성), frontend(Phase 14 테마 리팩터 회귀 여부/토큰 처리/폴링 정리/OAuth nonce/네비게이션) 각각을 다른
+  관점의 general-purpose 에이전트에게 맡겨 동시에 읽게 했다 — 순차로 하면 컨텍스트가 세 배로 걸릴 작업.
+  (Frontend 에이전트가 처음 체크아웃한 worktree 커밋이 Phase 14 테마 리팩터보다 한 커밋 뒤처져 있는 걸
+  스스로 감지하고 `git show <최신 커밋>:<경로>`로 올바른 버전을 읽어 감사했다 — 별도 지시 없이 회복.)
+- **정적 감사만으로 끝내지 않고 실제 실행 중인 서버에 라이브 검증을 추가**: 특히 인가(IDOR)는 코드를 읽는
+  것만으로는 "실제로 막히는지" 100% 확신할 수 없어, 테스트 계정 2개(A/B)를 만들어 A의 워크스페이스를 B의
+  토큰으로 GET/PATCH/DELETE/하위 리소스(설문·기획버전) 전부 시도했고, 관리자 전용 엔드포인트에 일반 사용자
+  토큰 및 서명이 조작된 위조 JWT로도 시도했다 — 실제 백엔드(`:8080`)와 실 Supabase를 대상으로. 테스트 계정은
+  즉시 정리했다.
+- **결제 트랜잭션 경계 버그의 수정도 실제 PortOne 샌드박스로 검증**: 존재하지 않는 billingKeyId로 구독을
+  두 번 연속 시도해, (a) 첫 시도가 결제 단계에서 실패하고 (b) 그 뒤 구독 행이 "이미 구독 중입니다"로 막히지
+  않고 재시도 가능한지, (c) DB에 남은 행이 고아 상태가 아니라 의도한 대로 `CANCELED`인지까지 실제 SQL로
+  확인했다(아래 "발견 1" 참고) — 실제 카드 결제(빌링키 발급)는 브라우저 SDK가 필요해 이번 phase 스코프
+  밖이라(§ 구독 관련 기존 한계, Phase 13 이전 기록 참고) 이 실패 경로만 실물로 검증 가능했다.
+- **에이전트 리포트를 그대로 믿지 않고 직접 검증하며 발견한 메타 버그**: Admin의 "설문 발행 검증" 수정을
+  라이브로 테스트하던 중, 검증 함수(`validateSurvey`)를 정의만 하고 실제 `publish()`에서 호출하는 걸 빠뜨린
+  걸 스스로 발견했다(정적 컴파일/린트는 이 실수를 못 잡는다 — 함수가 그냥 미사용 상태가 아니라 실제로 호출은
+  됐어야 하는데 안 됐을 뿐이라 `noUnusedLocals` 류 체크에도 안 걸림). 이 세션에서 "코드 리뷰 에이전트 결과 +
+  코드 수정 + 컴파일 통과"만으로 끝내지 않고 브라우저로 실제 클릭까지 해본 것이 이 누락을 잡아낸 유일한
+  방법이었다 — 정적 검증의 한계를 보여주는 사례라 기록해둔다.
+
+## 발견 및 수정 — Backend
+
+1. **[수정] 결제 트랜잭션 경계 버그 (MEDIUM, 결제 정합성)** — `SubscriptionService.subscribe()` 전체가 하나의
+   `@Transactional`이라, PortOne에 실제로 카드 결제를 성공시킨 뒤 "다음 달 결제 예약" 단계에서 예외가 나면
+   전체 트랜잭션이 롤백돼 방금 만든 `Subscription` 행까지 사라졌다 — 카드는 결제됐는데 그 결제를 가리킬 행이
+   없어, 이어지는 웹훅(`Transaction.Paid`)이 "존재하지 않는 구독"으로 조용히 무시해버리는 사고가 날 수 있었다.
+   `createPendingSubscription`(구독 행 생성+커밋) → PortOne 결제 요청(트랜잭션 밖) → 실패 시
+   `cancelSubscription`(재구독 가능하도록 CANCELED 처리)/성공 시 다음 결제 예약 → `finalizeSubscription`
+   순서로, 컨트롤러가 3개의 독립적인 트랜잭션 메서드를 오케스트레이션하는 구조로 나눴다(같은 빈 안에서
+   `this.xxx()` 자가 호출은 프록시를 안 거쳐 `@Transactional`이 무시된다는, `PortOneWebhookService`에 이미
+   있던 동일한 함정을 여기서도 피해야 했다). 결제까지 성공한 뒤 예약만 실패하는 경우엔 구독 행을 절대
+   되돌리지 않도록 했다 — 어차피 같은 결제를 확정하는 웹훅이 도착하면 `PortOneWebhookService.handlePaid`가
+   그 안에서 다음 결제 예약을 한 번 더 시도하므로(기존 코드에 이미 있던 동작), 자연스러운 재시도 경로가 된다.
+   `Subscription`에 `cancel()` 도메인 메서드를 추가했다.
+2. **[보류, LOW] 기획/분석/설계 버전·설문 응답 목록 API에 페이지네이션 없음** — Workspace/Admin 목록은
+   `Pageable`을 쓰는데 버전 목록류는 순수 `List`를 반환한다. Append-only 데이터라 장기적으로 무한정 쌓이므로
+   설계상 아쉽지만, 지금 당장 깨진 건 아니고 API 응답 shape을 바꾸면 admin/frontend 클라이언트 타입까지
+   동시에 고쳐야 하는 파급이 커서 이번 phase에서는 손대지 않고 기록만 남긴다.
+3. **[해결됨, 부수효과] 결제 API 호출이 DB 트랜잭션 커넥션을 붙든 채 실행되던 문제** — 위 1번 수정으로
+   `chargeFirstPayment`/`scheduleNextPayment`가 더 이상 `@Transactional` 메서드 안에 있지 않게 되면서
+   자연히 해소됐다.
+
+- **점검했지만 문제 없었던 영역**: 워크스페이스 하위 모든 리소스(설문/설문응답/기획·분석·설계 버전/AI Job/
+  PDF)의 소유권 체인 검증(라이브 IDOR 테스트로 재확인), JWT 발급/리프레시 로테이션, BCrypt 비밀번호 해시,
+  Google/Apple id_token의 audience·issuer 검증, PortOne 웹훅 HMAC 서명 검증 및 "웹훅 바디의 금액을 그대로
+  믿지 않고 PortOne API로 재조회"하는 방어, SQL 인젝션(전부 파라미터 바인딩/QueryDSL), `@Valid` 입력검증
+  일관성, N+1(설계상 모든 연관관계가 UUID FK+명시적 조회라 지연로딩 자체가 없음), 전역 예외 처리(스택트레이스
+  미노출), 민감정보 로깅(없음), 저장 데이터 암호화(빌링키 등 AES-256-GCM).
+
+## 발견 및 수정 — Admin
+
+1. **[수정] FREE 플랜 월별 한도가 실수로 0이 될 수 있는 경로 (HIGH)** — 대시보드 진입 시
+   `settingsApi.getFreeTierLimit()`에 `.catch()`가 없어 실패하면 조용히 무시됐고, 저장 시 `Number(limitInput)`
+   검증이 빈 문자열(`Number("") === 0`)을 유효한 0으로 통과시켰다 — 조회 실패 또는 입력창을 비운 채 저장을
+   누르면 전체 사용자의 무료 플랜 월 생성 한도가 0으로 바뀔 수 있었다. 조회 실패 시 에러 배너를 띄우고, 값을
+   못 불러온 동안은 저장 버튼을 비활성화했으며, 빈 문자열을 명시적으로 거부하도록 고쳤다.
+2. **[수정] 로그아웃과 토큰 갱신의 경합 — 로그아웃해도 새로고침하면 다시 로그인돼 있을 수 있음 (MEDIUM)** —
+   401을 받아 진행 중이던 `refreshAccessToken()`이 사용자가 "로그아웃"을 누른 직후에 뒤늦게 성공하면, 그
+   콜백이 `localStorage`에 새 토큰을 다시 채워넣어 로그아웃이 무효화될 수 있었다. `notifyLogout()`으로 올리는
+   epoch 카운터를 도입해, 진행 중이던 refresh가 로그아웃 이후에 완료되면 그 결과를 저장하지 않도록 했다.
+3. **[수정] 설문 정의 발행 시 클라이언트 검증이 전혀 없었음 (MEDIUM)** — 제목/문항이 비어 있거나 문항 ID·
+   promptKey가 중복/공백이거나 선택형 문항에 보기가 하나도 없어도 그대로 발행 API를 호출하고 있었다.
+   `validateSurvey()`를 추가해 제목·문항 존재 여부, ID/promptKey 중복·공백, 선택형 문항의 보기 존재·중복을
+   발행 전에 막았다. **라이브 테스트 중 검증 함수를 만들어놓고 `publish()`에서 호출하는 걸 빠뜨린 걸 발견해
+   즉시 고쳤다** — 위 "점검 방법론"에 적은 메타 버그가 바로 이것이다. (백엔드도 `title` 등에 `@NotBlank`가
+   있어 이 흠결이 있는 동안에도 실제로 잘못된 데이터가 저장되지는 않았음을 DB로 확인했다 — 방어가 이중이라
+   다행히 데이터 사고로는 이어지지 않았다.)
+4. **[수정] 프록시/게이트웨이가 JSON이 아닌 에러 본문을 반환하면 원본 예외가 그대로 노출됨 (LOW)** —
+   `JSON.parse`가 실패하면 `SyntaxError`가 `ApiError`로 감싸이지 않고 그대로 던져져 사용자에게 기술적인
+   원문이 보일 수 있었다. try/catch로 감싸 일관된 `ApiError`로 폴백하도록 고쳤다.
+5. **[보류, MEDIUM] 목록 조회 이펙트들에 stale-response 가드가 없음** — 탭을 빠르게 전환하면(예: 프롬프트
+   템플릿의 기획/분석/설계 탭) 늦게 도착한 이전 요청 응답이 최신 요청 응답을 덮어쓸 수 있다. 제출 자체는
+   최신 상태를 다시 읽어 안전하지만 화면에 보이는 목록/미리보기가 일시적으로 어긋날 수 있다. 5개 파일에
+   걸친 반복 패턴이라 이번 phase에서는 손대지 않고 기록만 남긴다.
+6. **[보류, LOW] 접근성 — label과 input의 `htmlFor`/`id` 연결 누락, 에러 알림에 `role="alert"` 없음** —
+   `LoginPage`/한도 입력 필드는 이미 올바르게 연결돼 있지만 설문/프롬프트 편집 폼 전반은 그렇지 않다. 파일
+   수가 많아 이번 phase 스코프에서는 보류.
+
+## 발견 및 수정 — Frontend
+
+1. **[수정] 토큰 갱신 후 재시도해도 401이면 로그인 상태가 깨진 채로 방치됨 (HIGH)** — 갱신된 토큰으로 재요청한
+   응답이 다시 401이면(예: 서버에서 계정이 정지/삭제됨) 그냥 일반 `ApiError`만 던지고 `onUnauthorized()`도
+   `tokenStorage.clear()`도 호출하지 않아, 이후 모든 요청이 계속 실패만 반복하고 사용자는 로그인 화면으로
+   돌아갈 방법이 없었다. 재시도 후 401이면 즉시 세션을 정리하고 `onUnauthorized()`를 호출하도록 고쳤다.
+2. **[수정] Google 로그인 nonce를 생성만 하고 아무도 검증하지 않음 (MEDIUM)** — `useGoogleAuthRequest()`가
+   매 요청마다 `Crypto.randomUUID()`로 nonce를 만들어 보내지만, 콜백으로 받은 id_token의 `nonce` 클레임과
+   비교하는 코드가 어디에도 없었다. (서버가 별도 세션 없이 무상태로 id_token 서명만 검증하는 구조라, 백엔드가
+   nonce 기준값을 알 방법이 없어 서버 쪽 검증은 애초에 의미가 없다 — OIDC nonce의 원래 목적대로 "이 브라우저가
+   자신이 시작한 요청의 결과를 받았는지" 확인하는 건 클라이언트의 책임이다.) `extractIdToken`이 `request`도
+   함께 받아 id_token 페이로드(서명 검증 없이 base64만 디코드 — 서명 자체의 진위는 어차피 백엔드가 Google
+   공개키로 재검증함)의 `nonce` 클레임을 우리가 보낸 값과 비교하고, 불일치/누락 시 로그인을 거부하도록
+   고쳤다. 리다이렉트 콜백에 다른 인증 흐름의 토큰이 주입/재생되는 것을 막는 방어.
+3. **[수정] 재생성 후 뒤로가기 시 오래된 워크스페이스 화면으로 돌아감 (MEDIUM)** — 기획/분석/설계를
+   "재생성"할 때 `router.push`로 `/generating`에 진입한 뒤 `generating.tsx`가 완료 시 `router.replace`로
+   워크스페이스 화면으로 돌아갔는데, `push`로 쌓인 스택 때문에 `replace`가 최신 인스턴스가 아니라 그 아래
+   깔려 있던(재생성 전 상태의) 오래된 화면 인스턴스 위에서 일어나 — 뒤로가기를 누르면 방금 생성한 버전이
+   안 보이는 오래된 화면으로 이동해 "생성한 게 사라졌나?" 착각하게 만들 수 있었다. 5곳의 `router.push`를
+   `router.replace`로 바꿔, `/generating` 진입 시점부터 스택에 중복 인스턴스가 쌓이지 않게 했다.
+4. **[수정] `useThemedStyles`가 매 렌더마다 스타일을 새로 만듦 (LOW, 성능)** — 테마가 안 바뀌어도 렌더마다
+   `StyleSheet.create`를 다시 호출하고 있었다(거의 모든 컴포넌트가 쓰는 훅이라 누적 비용이 있음).
+   `useMemo(() => ..., [colors])`로 감싸 테마가 실제로 바뀔 때만 재계산하도록 고쳤다.
+5. **[수정] 빈 답변 목록이 "아이템 있음" 설문으로 잘못 분류될 수 있는 극단 케이스 (LOW)** —
+   `inferPlanningDefinition`의 `every()`가 빈 집합에 대해 항상 `true`를 반환하는 vacuous truth 때문에,
+   답변이 0개면 무조건 `PLANNING_HAS_IDEA`로 잘못 추론될 수 있었다(필수 문항이 있어 실제 발생 가능성은
+   낮음). 빈 집합을 명시적으로 배제하도록 한 줄 추가.
+
+- **점검했지만 문제 없었던 영역**: Phase 14 테마 리팩터로 인한 회귀(정적 `colors`/`typography` import
+  잔존 여부 등 — 없음), 동시 401에 대한 refresh 공유(경합 없음, Admin과 동일 패턴), `generating.tsx`의
+  폴링 정리(언마운트 시 타이머 해제·`cancelled` 플래그 모두 정상), `PdfButton`의 `Linking.openURL`이 항상
+  신뢰된 백엔드 응답의 URL만 여는지(그렇다), 하드코딩된 시크릿(없음).
+
+## 테스트 결과
+
+- **정적 검증**: 수정 완료 후 `backend`(`./gradlew compileJava`), `admin`(`npx tsc --noEmit`),
+  `frontend`(`npx tsc --noEmit`, `npx expo lint`) 전부 에러 없이 통과.
+- **라이브 IDOR/인가 테스트**(실제 `:8080` + 실 Supabase, 로컬 백엔드가 세션 도중 알 수 없는 이유로 한 번
+  내려가 있어 재기동 후 진행): 사용자 A가 만든 워크스페이스를 사용자 B의 토큰으로 GET/PATCH/DELETE 및
+  하위 설문·기획버전 목록까지 시도 — 전부 `400 (존재하지 않는 워크스페이스입니다)`로 일관되게 차단, 데이터
+  유출 없음. 일반 사용자 토큰과 서명이 조작된 위조 JWT로 관리자 전용 엔드포인트(`/api/admin/*`) 접근 시도 —
+  각각 `403`/`401`로 차단. 테스트 계정 2개는 정리했다.
+- **결제 실패 경로 라이브 검증**: 존재하지 않는 billingKeyId로 구독 API를 연속 두 번 호출 — 둘 다 PortOne
+  샌드박스가 실제로 `BillingKeyNotFoundException`으로 거절했고, 두 번째 시도가 "이미 구독 중입니다"로 막히지
+  않고 동일하게 결제 단계까지 도달함을 확인, DB 조회로 두 시도 모두 `CANCELED` 상태로 정리됐고 고아 행이
+  남지 않았음을 확인. 테스트 계정/구독 행은 정리했다.
+- **Admin 실브라우저 검증**: 임시 계정을 ADMIN으로 승격해 로그인 → 대시보드 콘솔 에러 없음(free-tier 한도
+  조회 fix 확인) → 설문 정의 발행 화면에서 제목을 비우고 발행 시도 → (수정 전) 실제로 400 API 호출까지
+  나가는 걸 확인해 위 메타 버그를 발견 → 수정 후 재시도 → API 호출 없이 클라이언트 단에서
+  "설문 제목을 입력해주세요." 즉시 표시됨을 확인. DB 조회로 이 과정에서 잘못된 설문 버전이 실제로 저장되지
+  않았음을 재확인. 테스트 계정 정리.
+- **Frontend 실브라우저 검증**: 신규 계정 회원가입 → 워크스페이스 목록 화면 정상 진입, 콘솔 에러 없음(위
+  수정들이 정상 경로를 깨지 않았음을 확인). 다만 재생성→뒤로가기 네비게이션 수정 자체와 Google 로그인
+  nonce 수정은 각각 실제 AI 생성 파이프라인 전체 재실행과 Google Cloud Console redirect URI 등록이 필요해
+  이번 phase에서 엔드투엔드로는 검증하지 못했다(코드 검토와 정적 검증까지만) — 아래 한계에 기록.
+- 이 phase에서 만든 모든 테스트 계정(IDOR용 2개, 구독 실패 경로용 1개, Admin 승격용 1개, Frontend용 1개)과
+  워크스페이스/구독/결제이력 행을 전부 정리했고, Playwright 스크린샷/`.playwright-mcp/`도 저장소에서 정리했다.
+
+## 한계
+
+- **Google OAuth nonce 수정, 재생성 후 네비게이션 수정**: 코드 검토·정적 검증만 마쳤고 실제 브라우저에서
+  전체 플로우로 검증하지 못했다 — 전자는 Google Cloud Console redirect URI 등록이 안 돼 있어(기존부터의
+  한계), 후자는 실제 AI 생성(Claude API 호출, 수십 초 소요)을 여러 번 왕복해야 해 이번 phase 스코프에서는
+  생략했다.
+- **결제 성공 경로 자체는 이번에도 실물 검증 불가**: 빌링키 발급이 PortOne 브라우저 SDK로만 가능해 curl로
+  흉내낼 수 없다(Phase 13 이전부터의 기존 한계) — 이번엔 "결제 실패 시 안전하게 정리되는지"만 실물로
+  검증했고, "결제 성공 후 실제로 다음 달 예약까지 잘 되는지"는 여전히 코드 검토 수준이다.
+- **버전 목록 API 페이지네이션 미비, Admin의 stale-response 경합, 접근성(label 연결/aria-live) 미비**는
+  발견했지만 이번 phase에서는 의도적으로 보류했다(위 각 항목의 이유 참고) — Phase 16 문서화 또는 이후
+  유지보수 phase에서 필요 시 처리.
+
+---
+
+# Phase 16: 후속 업데이트 - 1
+
+> Phase 15 점검에서 의도적으로 보류했던 항목 + 실제 코드베이스를 다시 훑어보며 찾은 "서비스로서 아직 비어있는
+> 자리"를 후보로 정리해 제안했고, 사용자가 "전체 다 진행"을 선택해 아래 8개 항목을 전부 실제 작업으로
+> 진행했다. 비밀번호 재설정 이메일 발송은 Gmail SMTP(앱 비밀번호)로 결정.
+
+## 작업 항목
+
+### A. Phase 15에서 보류했던 항목
+
+- [x] 기획/분석/설계 버전 목록 API 페이지네이션
+- [x] Admin 리스트 조회 화면들의 stale-response 경합
+- [x] 접근성 — `<label htmlFor>` 연결, 에러 메시지에 `role="alert"` 부여
+
+### B. 계정/보안
+
+- [x] 비밀번호 재설정 플로우 (Gmail SMTP)
+- [x] 회원 탈퇴(계정 삭제/비활성화) API + UI
+- [x] 다른 기기에서 로그아웃(전체 세션 무효화) — 확인 결과 이미 구현돼 있었음(아래 설계 결정 참고), 별도
+      코드 변경 없음
+
+### C. Admin 대시보드
+
+- [x] Admin 대시보드 실질화 — 가입자/FREE·PRO/이번 달 AI 생성/이번 달 결제 성공·실패 통계 카드 추가
+
+### D. UX 개선
+
+- [x] AI 생성 완료를 앱 밖에서도 알기 — 전역 폴링 Provider + 완료/실패 배너
+- [x] 버전 비교(diff) 뷰
+
+## 설계 결정
+
+- **버전 목록 페이지네이션**: Workspace 목록(Phase 04)과 동일한 `Pageable`/`PagedModel` 패턴을 기획/분석/
+  설계 버전 목록 API(`GET .../planning-versions` 등)에 그대로 적용했다(`@PageableDefault(size=20,
+sort="versionNo", direction=DESC)`). 다만 정렬은 항상 최신순 고정이라 Workspace처럼 사용자가 정렬 필드를
+  고를 필요가 없어 Querydsl 없이 Spring Data 파생 쿼리(`findAllBy...AndDeletedAtIsNull(id, Pageable)`)만
+  추가했다. 내부적으로 "가장 최근 완료 버전"을 찾는 기존 무페이징 메서드(`AnalysisFeatureOptionResolver`
+  등이 사용)는 그대로 남겨뒀다 — 사용자 노출 API만 페이징하고 내부 조회는 건드릴 이유가 없었다. Frontend는
+  `page=0&size=50`으로 고정 조회해 `.content`만 쓰는 방식으로 대응했다(Workspace 목록 화면도 이미 "더 보기"
+  UI 없이 같은 패턴을 쓰고 있어 일관성을 맞춤 — 신규 UI 설계를 늘리지 않았다).
+- **다른 기기 로그아웃은 이미 있었다**: `RefreshTokenStore`(Phase 03)가 애초에 "회원 1명당 refresh token
+  1개"만 저장하는 구조라, 다른 기기에서 로그인하면 `save()`가 기존 키를 덮어써 이전 기기는 자동으로
+  로그아웃된다. 즉 "전체 로그아웃" 기능은 코드 추가 없이 이미 만족돼 있었다 — 이 항목은 검증만 하고
+  종료했다.
+- **비밀번호 재설정 — OTP 코드 방식(딥링크 아님)**: Frontend가 모바일 앱(Expo)이라 이메일의 "재설정 링크"를
+  클릭했을 때 앱으로 정확히 돌아오게 하려면 딥링크(커스텀 스킴/Universal Link) 설정이 필요한데, 이 프로젝트는
+  아직 그런 설정이 없다. 대신 이메일로 6자리 숫자 코드를 보내고, 앱 안에서 코드+새 비밀번호를 직접 입력하는
+  방식을 택했다 — 딥링크 인프라 없이도 동작하고, Admin(웹)에도 동일한 API를 그대로 재사용할 수 있다.
+  `PasswordResetCodeStore`(Redis, `RefreshTokenStore`와 같은 계열)에 코드 10분 TTL로 저장, 쿨다운 60초
+  (SETNX로 원자적 처리), 5회 오답 시 코드 자동 무효화(브루트포스 방지, 6자리는 100만 경우의 수뿐이라 시도
+  횟수 제한이 필수).
+- **이메일 열거 공격 방지**: `/password-reset/request`는 계정 존재 여부·provider(LOCAL/OAuth)와 무관하게
+  항상 204를 반환한다. 쿨다운도 계정 존재 여부와 무관하게 항상 먼저 적용해, 응답 코드나 타이밍이 "이 이메일로
+  가입된 계정이 있는지"를 알려주는 사이드 채널이 되지 않게 했다. **실기동 테스트 중 이 원칙이 실제로 깨질 뻔한
+  버그를 발견해 수정했다** — 아래 "발견 및 수정" 참고.
+- **회원 탈퇴 — 하드 삭제 대신 익명화**: `users`는 `workspaces`/`subscriptions`/`payment_history` 등에서
+  FK로 참조돼 하드 삭제가 불가능하고, 결제 이력은 세무/분쟁 대응을 위해 보존해야 한다. `Member.withdraw()`가
+  이메일을 `withdrawn-{id}@deleted.local`로 바꾸고 `password_hash`/`provider_id`를 지운 뒤
+  `withdrawn_at`(신규 컬럼, `V6__add_withdrawal_to_users.sql`)을 채운다. 이메일이 바뀌므로 이후 원래
+  이메일/OAuth 계정으로는 이 행을 찾을 수 없어 로그인이 자연히 막히고(별도의 "탈퇴 여부" 검사 코드 불필요),
+  동시에 원래 이메일 주소는 즉시 재가입에 쓸 수 있게 풀린다.
+- **탈퇴 시 활성 구독이 있으면 차단**: 코드 전체를 확인한 결과 **자체 구독 해지 self-service API가 이
+  프로젝트에 아예 없다**(Admin에도 없음, `SubscriptionAdminService`는 조회만 함) — 결제 실패 롤백용
+  `SubscriptionService.cancelSubscription()`만 있는데, 이건 PortOne에 실제 결제 예약이 없는 상태에서만
+  안전하다. 탈퇴 시 활성 구독을 자동 해지하려면 PortOne 결제 스케줄 취소 API까지 새로 검증 없이 끼워 넣어야
+  해서, 실제 돈이 걸린 로직을 이번 스코프에서 무리해서 만들지 않고 "구독 중에는 탈퇴할 수 없습니다. 구독을
+  먼저 해지해주세요"로 막는 선택을 했다(많은 SaaS가 채택하는 흔한 패턴이기도 하다). **부수적으로 발견한 갭**:
+  그러면 사용자가 구독을 해지할 방법 자체가 없다는 뜻이라, 이 자체가 후속 조치가 필요한 별도 이슈다 — 아래
+  "한계"에 기록.
+- **Admin 대시보드 통계는 별도 `admin` 패키지**: 새 지표(가입자 수, AI 생성 건수, 결제 건수)가 member/ai/
+  subscription 세 도메인에 걸쳐 있어 특정 도메인 소속으로 보기 애매했다. `SubscriptionAdminService`처럼
+  기존 도메인에 억지로 얹는 대신, `domain/admin/{api,application}`이라는 새 패키지를 만들어
+  `DashboardAdminService.summary()`가 세 리포지토리를 직접 조합하게 했다.
+- **AI 생성 완료 전역 추적**: 기존엔 `generating.tsx` 화면이 폴링 타이머를 직접 소유해서, 화면 안내 문구가
+  "화면을 벗어나도 계속 진행됩니다"라고 말하면서도 실제로는 화면을 벗어나면(뒤로가기 등) 폴링이 끊겨 완료
+  여부를 알 방법이 없는 문구-동작 불일치가 있었다. 폴링을 화면 생명주기와 분리된 `JobPollingProvider`(앱
+  루트, `_layout.tsx`)로 옮기고, `generating.tsx`는 그 상태를 구독만 하도록 바꿨다. 사용자가 화면을 벗어난
+  뒤 완료/실패되면 `JobCompletionBanner`(루트에 항상 마운트, `/generating` 화면에서는 중복이라 숨김)가
+  전역으로 떠서 탭하면 결과 화면으로 이동한다. 정식 푸시 알림(`expo-notifications`)까지는 가지 않았다 —
+  앱이 백그라운드/완전 종료 상태일 때까지 알리려면 별도 패키지 설치와 서버 푸시 토큰 관리가 필요해 스코프가
+  커지고, 이번 개선의 핵심 문제(화면 이동 시 추적이 끊기는 것)는 인앱 전역 상태만으로 해결되기 때문이다.
+- **버전 비교(diff) — 스키마 무관 범용 구현**: 기획/분석/설계 세 도메인의 `content`가 서로 다른 JSON
+  스키마([01] 12-4 등)를 가지고 있어, 도메인별로 비교 UI를 각각 만드는 대신 값을 `"경로: 문자열"` 형태로
+  평탄화(`contentDiff.ts`)해 공통 `VersionDiffView`로 비교한다. 필드 라벨은 완벽한 한글화 대신
+  `idea_summary.one_line_pitch` → `idea summary > one line pitch`처럼 가벼운 가공만 했다 — 세 도메인
+  전체 필드에 대한 라벨 맵을 유지하는 비용이 이 기능의 우선순위(하) 대비 과하다고 판단했다.
+
+## 발견 및 수정 — 실기동 테스트 중 찾은 버그
+
+- **[치명, 수정] 비밀번호 재설정 요청이 이메일 존재 여부를 노출할 뻔함**: `mailService.send(...)`가 SMTP
+  인증 실패(자격증명 미설정) 등으로 예외를 던지면 `requestReset()` 전체가 그대로 예외를 던져 500이
+  났다 — 존재하지 않는 이메일/OAuth 계정은 항상 204인데, 실제 가입된 LOCAL 계정만 발송 실패 시 500이 나서
+  **응답 코드 자체가 "이 이메일로 가입된 계정이 있다"는 신호가 되는 이메일 열거 사이드 채널**이었다. 실제로
+  로컬 환경에서 `GMAIL_APP_PASSWORD`가 비어 있는 상태로 라이브 테스트하다가 그대로 재현됨 — `mailService.send`
+  호출을 try/catch로 감싸 발송 실패는 로그로만 남기고 응답은 항상 동일하게 유지하도록 수정.
+- **[중간, 수정] `/actuator/health`가 매 호출마다 실제 SMTP 연결을 시도**: `spring-boot-starter-mail`을
+  추가하자 Spring Boot Actuator가 `MailHealthIndicator`를 자동 등록해, 헬스체크를 호출할 때마다 Gmail SMTP에
+  실제로 연결을 시도했다. 로컬에서 `/actuator/health`를 반복 호출하며 재현 — 자격증명이 비어 있으면 매번
+  타임아웃에 가깝게 느려지고(로컬에서 헬스체크 응답이 아예 안 올 정도), Render 배포 시 `healthCheckPath:
+/actuator/health`(render.yaml)가 이 때문에 계속 DOWN으로 잡혀 배포 자체가 막힐 뻔한 문제였다. 비밀번호
+  재설정은 핵심 기능이 아니므로(로그인 자체를 막는 Redis와는 다르게 취급) `management.health.mail.enabled:
+false`로 껐다.
+
+## 테스트 결과
+
+- **정적 검증**: `backend`(`./gradlew compileJava`), `admin`(`npx tsc --noEmit`, `oxlint`),
+  `frontend`(`npx tsc --noEmit`, `npx expo lint`) 전부 에러 없이 통과. `frontend`는 새 라우트
+  (`account`/`forgot-password`/`reset-password`)를 인식시키기 위해 `expo start`를 한 번 띄워 Expo Router
+  타입(`​.expo/types/router.d.ts`)을 재생성한 뒤 재검증했다.
+- **`./gradlew test`(Testcontainers)는 이번엔 실행 불가**: 로컬 Docker Desktop이 꺼져 있어(`docker info`
+  실패) Testcontainers가 Postgres 컨테이너를 못 띄웠다 — 코드 문제가 아니라 이번 세션의 환경 제약. 대신
+  아래처럼 실제 Supabase에 대한 라이브 테스트로 대체 검증했다(이 프로젝트가 원래 선호하는 방식이기도 하다).
+- **라이브 백엔드 테스트**(`./gradlew bootRun`, 실제 Supabase + 로컬 Redis(Homebrew, Docker 아님)):
+  - 비밀번호 재설정: 가입 → 요청(204) → 즉시 재요청(429 `TOO_MANY_REQUESTS`) → 존재하지 않는 이메일 요청도
+    동일하게 204 → 틀린 코드로 확정 시도(400) 모두 확인. 이 과정에서 위 "이메일 열거" 버그를 실제로
+    재현·수정.
+  - 회원 탈퇴: 가입 → 탈퇴(204) → 기존 이메일/비밀번호로 로그인 시도(400, 일반 메시지) → **같은 이메일로
+    즉시 재가입 성공** 확인. 탈퇴 시점에 이미 발급돼 있던 access token은(설계대로) 만료 전까지는 여전히
+    `/me`를 통과함을 확인 — 기존 로그아웃과 동일한 JWT stateless 트레이드오프이며 새로운 문제가 아님.
+  - 버전 목록 페이지네이션: `GET .../planning-versions?page=0&size=5` 호출로 `{content, page:{size,
+number, totalElements, totalPages}}` 형태 응답 확인.
+  - Admin 대시보드 통계: 임시 계정을 ADMIN으로 승격해 `GET /api/admin/dashboard/summary` 호출,
+    `totalMembers`/`freeMembers`/`proMembers`/`generationsThisMonth`/`paymentsSucceededThisMonth`/
+    `paymentsFailedThisMonth`가 DB 실제 상태와 일치함을 확인.
+- **Admin 실브라우저 검증**(Playwright, 로컬 Vite + 실제 백엔드): 로그인 화면에서 "비밀번호를 잊으셨나요?"
+  클릭 → 이메일 입력(seed 계정 `admin@alrdream.test`) → 요청 → Redis에서 실제 코드를 직접 조회해(이메일
+  발송 자체는 자격증명 미설정으로 실패하지만 코드 저장/쿨다운/응답은 정상 동작함을 이렇게 확인) 입력 →
+  재설정 성공 → 새 비밀번호로 로그인 → 대시보드 통계 카드(전체 가입자/FREE·PRO/이번 달 생성/이번 달 결제)가
+  실제 값으로 렌더링됨을 확인. 테스트로 바뀐 seed 계정 비밀번호는 원래 해시로 복구.
+- **Frontend 실브라우저 검증**(Playwright, `expo start --web` + 실제 백엔드): `/forgot-password` 렌더
+  확인 → 신규 계정으로 요청 → `/reset-password?email=...`로 자동 이동 및 이메일 프리필 확인 → Redis에서
+  코드 조회해 입력 → 재설정 성공 → 로그인 화면 이동 → 새 비밀번호로 로그인 → 헤더 링크가 "로그아웃"에서
+  "계정"으로 바뀐 것 확인 → `/account` 진입해 이메일 표시·탈퇴 확인 플로우 확인 → 탈퇴 실행 → 자동으로
+  `/sign-in`으로 이동(세션 정리) 확인. 콘솔 에러는 로그인 전 `/me`·`/refresh` 401/400뿐으로, 세션 없는
+  상태에서의 기존 정상 동작이며 이번 변경과 무관함을 확인.
+  다만 **AI 생성 완료 전역 배너(`JobCompletionBanner`)와 버전 비교(diff) 뷰는 실제 AI 생성(수십 초~1분,
+  Claude API 비용 발생)을 거쳐야 해 이번 라이브 테스트 범위에서는 제외**했다 — 정적 검증(tsc/lint)만
+  통과했고, 코드 리뷰 수준으로만 확인했다.
+- 테스트로 생성한 계정(백엔드 curl 4개, Admin/Frontend 브라우저 각 1개)과 워크스페이스 1개, Redis의
+  `password-reset-*` 키는 전부 정리했고, Playwright 스크린샷/`.playwright-mcp/`도 정리했다.
+
+## 한계
+
+- ~~실제 이메일 발송은 검증하지 못했다~~ **(해결, 후속 검증 완료)**: 최초 작성 시점엔 `GMAIL_APP_PASSWORD`가
+  비어 있어 SMTP 인증이 항상 실패했다. 사용자가 자격증명을 채운 뒤 재검증하는 과정에서 두 가지를 발견·수정
+  했다 — (1) 앱 비밀번호를 Google이 화면에 보여주는 대로 `okcq iqrv plzx mwvw`(공백 포함)로 넣으면 그 공백이
+  그대로 SMTP 비밀번호 값에 포함돼 인증이 실패한다(공백 제거 필요), (2) `GMAIL_USERNAME`이 실제 앱 비밀번호를
+  발급받은 계정과 다른 Gmail 주소로 잘못 적혀 있었다(사용자가 직접 확인 후 정정). 두 원인을 제거한 뒤 실제
+  `bootRun`으로 재발송 테스트해 예외 없이 발송이 완료됨을 로그로 확인(이전엔 매번
+  `MailAuthenticationException`이 남았음) — Redis에 저장된 코드도 함께 확인했다. 실제 수신함 도착 자체는
+  에이전트가 메일함에 접근할 수 없어 사용자 확인이 필요하지만, SMTP 인증·발송 단계는 더 이상 실패하지 않는다.
+- **구독 해지 self-service API 부재가 새 갭으로 드러남**: 위 설계 결정에서 언급한 대로, 탈퇴가 활성 구독을
+  막는 게 정상 동작이려면 애초에 구독을 해지할 방법이 있어야 하는데 이 프로젝트엔 없다(Admin에도 없음).
+  Pro 구독자가 탈퇴하려면 현재는 막다른 길이라, 이번 phase 스코프 밖의 후속 이슈로 남긴다.
+  이메일 인증(가입 시 이메일 확인)은 여전히 다루지 않았다 — 비밀번호 재설정과 달리 없어도 서비스 운영
+  자체를 막지 않는다는 이전 판단을 유지한다.
+- **AI 생성 완료 배너/버전 비교 뷰는 실제 생성 파이프라인으로 끝까지 검증하지 못했다**: 정적 검증만
+  통과했고, 실제 Claude 호출을 거친 완료/실패 전환 및 두 버전 비교 화면 렌더링은 코드 리뷰 수준이다.
+- **`./gradlew test`(Testcontainers)는 Docker 미실행으로 이번 세션에서 실행하지 못했다** — 다음 세션에서
+  Docker Desktop을 켠 뒤 재검증 필요.
+- **Apple 로그인**은 기존 이슈(Apple Developer 자격증명)로 계속 보류 상태이며 이번 phase와 무관하다.
+
+---
+
+# Phase 17: 후속 업데이트 - 2
+
+> 현재 서비스의 UI의 퀄리티가 낮은 관계로 더욱 심미적으로 개선한다.
+
+- [ ] admin을 대상으로 전체 UI 개선
+- [ ] frontend를 대상으로 전체 UI 개선
+
+---
+
+# Phase 18: 기능 및 비기능 전체 점검 - 2
+
+## 작업 항목
+
+- [ ] backend를 대상으로 전체 점검
+- [ ] admin을 대상으로 전체 점검
+- [ ] frontend를 대상으로 전체 점검
+- [ ] 기능 및 비기능 점검 (보안 취약성도 추가로 점검)
+
+---
+
+# Phase XX: 문서 업데이트
+
+## 작업 항목
+
+- [ ] README.md에 누락사항 확인 후 업데이트
+- [ ] docs 디렉토리에 구현한 스키마 관련 md 확장자 문서 작성
+- [ ] docs 디렉토리에 구현한 사항 PPT 발표용으로 정리하여 md 확장자 문서 작성 (주요 기능 사용 예시도 캡쳐해서 이미지로 저장할 것)
+
+---
+
 # Phase XX: 프로덕션 릴리즈 마무리
 
 > 기본 배포 파이프라인은 Phase 01에서 이미 구축됨. 여기서는 완성된 전 기능을 실제로 얹고 최종 점검한다.

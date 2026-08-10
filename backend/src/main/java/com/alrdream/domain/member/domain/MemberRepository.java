@@ -16,4 +16,7 @@ public interface MemberRepository extends JpaRepository<Member, UUID> {
 
 	/** [03] §2-1 Admin의 사용자 CS 조회. */
 	Page<Member> findByEmailContainingIgnoreCase(String keyword, Pageable pageable);
+
+	/** Phase 16 — Admin 대시보드 통계. */
+	long countByPlan(MemberPlan plan);
 }

@@ -1,11 +1,24 @@
+import { useFonts } from "expo-font";
 import { Stack, SplashScreen } from "expo-router";
+import { StatusBar } from "expo-status-bar";
 import { AuthProvider, useAuth } from "../auth/AuthContext";
+import { JobCompletionBanner } from "../components/job/JobCompletionBanner";
+import { JobPollingProvider } from "../components/job/JobPollingContext";
+import { ThemeProvider, useTheme } from "../components/ui/ThemeContext";
 
 SplashScreen.preventAutoHideAsync();
 
-function SplashScreenController() {
+export const fonts = {
+  "Pretendard-Regular": require("../../assets/fonts/Pretendard-Regular.ttf"),
+  "Pretendard-Medium": require("../../assets/fonts/Pretendard-Medium.ttf"),
+  "Pretendard-SemiBold": require("../../assets/fonts/Pretendard-SemiBold.ttf"),
+  "Pretendard-Bold": require("../../assets/fonts/Pretendard-Bold.ttf"),
+};
+
+function SplashScreenController({ fontsReady }: { fontsReady: boolean }) {
   const { status } = useAuth();
-  if (status !== "loading") {
+  const { ready: themeReady } = useTheme();
+  if (status !== "loading" && fontsReady && themeReady) {
     SplashScreen.hide();
   }
   return null;
@@ -23,16 +36,34 @@ function RootNavigator() {
       <Stack.Protected guard={!authenticated}>
         <Stack.Screen name="sign-in" />
         <Stack.Screen name="sign-up" />
+        <Stack.Screen name="forgot-password" />
+        <Stack.Screen name="reset-password" />
       </Stack.Protected>
     </Stack>
   );
 }
 
-export default function RootLayout() {
+function AppShell({ fontsReady }: { fontsReady: boolean }) {
+  const { scheme } = useTheme();
   return (
     <AuthProvider>
-      <SplashScreenController />
-      <RootNavigator />
+      <JobPollingProvider>
+        <StatusBar style={scheme === "light" ? "dark" : "light"} />
+        <SplashScreenController fontsReady={fontsReady} />
+        <RootNavigator />
+        <JobCompletionBanner />
+      </JobPollingProvider>
     </AuthProvider>
+  );
+}
+
+export default function RootLayout() {
+  const [fontsLoaded, fontsError] = useFonts(fonts);
+  const fontsReady = fontsLoaded || !!fontsError;
+
+  return (
+    <ThemeProvider>
+      <AppShell fontsReady={fontsReady} />
+    </ThemeProvider>
   );
 }

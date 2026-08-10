@@ -38,6 +38,11 @@ services:
           type: keyvalue
           name: alrdream-redis
           property: port
+      # Phase 16 — 비밀번호 재설정 코드 발송용 Gmail 계정("앱 비밀번호"). Render 대시보드에서 직접 입력.
+      - key: GMAIL_USERNAME
+        sync: false
+      - key: GMAIL_APP_PASSWORD
+        sync: false
 
   # RefreshTokenStore(로그인/로그아웃 시 refresh token 저장) 전용. Free 플랜은 재시작 시 데이터가 날아가는데,
   # refresh token은 어차피 만료 가능한 세션 데이터라 재로그인만 유도될 뿐 치명적이지 않음 — 초기 단계엔 충분.

@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Pressable, Text, View } from "react-native";
 import { useLocalSearchParams, useNavigation } from "expo-router";
 import { workspacesApi } from "../../../../api/workspaces";
 import { planningApi } from "../../../../api/planning";
 import { ApiError } from "../../../../api/client";
 import { ScreenContainer } from "../../../../components/ui/ScreenContainer";
 import { Loading, ErrorBanner } from "../../../../components/ui/Feedback";
-import { colors, typography } from "../../../../components/ui/theme";
+import { useTheme, useThemedStyles } from "../../../../components/ui/ThemeContext";
 import { PlanningTab } from "../../../../components/workspace/PlanningTab";
 import { AnalysisTab } from "../../../../components/workspace/AnalysisTab";
 import { DesignTab } from "../../../../components/workspace/DesignTab";
@@ -25,6 +25,14 @@ const TABS: { key: TabKey; label: string }[] = [
 export default function WorkspaceDetailScreen() {
   const { id, tab: initialTab } = useLocalSearchParams<{ id: string; tab?: TabKey }>();
   const navigation = useNavigation();
+  const { typography } = useTheme();
+  const styles = useThemedStyles((colors) => ({
+    tabs: { flexDirection: "row" as const, gap: 20, borderBottomWidth: 1, borderBottomColor: colors.border },
+    tabButton: { paddingBottom: 10, gap: 8 },
+    tabActive: { color: colors.primary },
+    tabInactive: { color: colors.textMuted },
+    tabUnderline: { height: 2, backgroundColor: colors.primary, borderRadius: 1 },
+  }));
   const [workspace, setWorkspace] = useState<Workspace | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState<TabKey>((initialTab as TabKey) ?? "planning");
@@ -111,11 +119,3 @@ export default function WorkspaceDetailScreen() {
     </ScreenContainer>
   );
 }
-
-const styles = StyleSheet.create({
-  tabs: { flexDirection: "row", gap: 20, borderBottomWidth: 1, borderBottomColor: colors.border },
-  tabButton: { paddingBottom: 10, gap: 8 },
-  tabActive: { color: colors.primary },
-  tabInactive: { color: colors.textMuted },
-  tabUnderline: { height: 2, backgroundColor: colors.primary, borderRadius: 1 },
-});

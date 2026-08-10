@@ -1,8 +1,14 @@
-import { StyleSheet, Text, View } from "react-native";
+import { Text, View } from "react-native";
 import { Card } from "../ui/Card";
-import { colors, typography } from "../ui/theme";
+import { useTheme, useThemedStyles } from "../ui/ThemeContext";
+import { fontFamily } from "../ui/theme";
 
 export function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  const { typography } = useTheme();
+  const styles = useThemedStyles((colors) => ({
+    section: { borderColor: colors.border },
+    body: { gap: 14 },
+  }));
   return (
     <Card style={styles.section}>
       <Text style={typography.heading}>{title}</Text>
@@ -12,6 +18,11 @@ export function Section({ title, children }: { title: string; children: React.Re
 }
 
 export function TextRow({ label, value }: { label?: string; value: string }) {
+  const styles = useThemedStyles((colors) => ({
+    row: { gap: 4 },
+    rowLabel: { fontSize: 12.5, fontFamily: fontFamily.bold, color: colors.textMuted, textTransform: "uppercase" as const },
+    rowValue: { fontSize: 14.5, fontFamily: fontFamily.regular, color: colors.text, lineHeight: 21 },
+  }));
   return (
     <View style={styles.row}>
       {label ? <Text style={styles.rowLabel}>{label}</Text> : null}
@@ -21,6 +32,11 @@ export function TextRow({ label, value }: { label?: string; value: string }) {
 }
 
 export function ListRow({ label, items }: { label: string; items: string[] }) {
+  const styles = useThemedStyles((colors) => ({
+    row: { gap: 4 },
+    rowLabel: { fontSize: 12.5, fontFamily: fontFamily.bold, color: colors.textMuted, textTransform: "uppercase" as const },
+    bullet: { fontSize: 14.5, fontFamily: fontFamily.regular, color: colors.text, lineHeight: 21 },
+  }));
   return (
     <View style={styles.row}>
       <Text style={styles.rowLabel}>{label}</Text>
@@ -34,6 +50,20 @@ export function ListRow({ label, items }: { label: string; items: string[] }) {
 }
 
 export function StageList({ items }: { items: { stage?: string; phase?: string; tasks?: string; actions?: string }[] }) {
+  const { typography } = useTheme();
+  const styles = useThemedStyles((colors) => ({
+    stageRow: { flexDirection: "row" as const, gap: 10 },
+    stageBadge: {
+      width: 24,
+      height: 24,
+      borderRadius: 12,
+      backgroundColor: colors.primarySoft,
+      alignItems: "center" as const,
+      justifyContent: "center" as const,
+    },
+    stageBadgeText: { fontSize: 12, fontFamily: fontFamily.bold, color: colors.primaryHover },
+    stageTitle: { fontSize: 14.5, fontFamily: fontFamily.bold, color: colors.text },
+  }));
   return (
     <View style={{ gap: 10 }}>
       {items.map((item, i) => (
@@ -50,23 +80,3 @@ export function StageList({ items }: { items: { stage?: string; phase?: string; 
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  section: { borderColor: colors.border },
-  body: { gap: 14 },
-  row: { gap: 4 },
-  rowLabel: { fontSize: 12.5, fontWeight: "700", color: colors.textMuted, textTransform: "uppercase" },
-  rowValue: { fontSize: 14.5, color: colors.text, lineHeight: 21 },
-  bullet: { fontSize: 14.5, color: colors.text, lineHeight: 21 },
-  stageRow: { flexDirection: "row", gap: 10 },
-  stageBadge: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: colors.primarySoft,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  stageBadgeText: { fontSize: 12, fontWeight: "700", color: colors.primaryHover },
-  stageTitle: { fontSize: 14.5, fontWeight: "700", color: colors.text },
-});
