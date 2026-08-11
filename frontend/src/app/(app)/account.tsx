@@ -3,6 +3,7 @@ import { Text, View } from "react-native";
 import { useAuth } from "../../auth/AuthContext";
 import { ApiError } from "../../api/client";
 import { Button } from "../../components/ui/Button";
+import { Card } from "../../components/ui/Card";
 import { ErrorBanner } from "../../components/ui/Feedback";
 import { ScreenContainer } from "../../components/ui/ScreenContainer";
 import { useTheme, useThemedStyles } from "../../components/ui/ThemeContext";
@@ -13,14 +14,7 @@ export default function AccountScreen() {
   const styles = useThemedStyles((colors) => ({
     wrap: { gap: 28 },
     section: { gap: 10 },
-    dangerSection: {
-      gap: 10,
-      borderWidth: 1,
-      borderColor: colors.dangerSoft,
-      backgroundColor: colors.dangerSoft,
-      padding: 16,
-      borderRadius: 14,
-    },
+    dangerSection: { gap: 10 },
     dangerHeading: { color: colors.danger },
     confirmButtons: { flexDirection: "row" as const, gap: 10 },
     saveButton: { alignSelf: "flex-start" as const },
@@ -49,7 +43,7 @@ export default function AccountScreen() {
           <Button label="로그아웃" variant="secondary" onPress={logout} style={styles.saveButton} />
         </View>
 
-        <View style={styles.dangerSection}>
+        <Card tone="danger" style={styles.dangerSection}>
           <Text style={[typography.heading, styles.dangerHeading]}>회원 탈퇴</Text>
           <Text style={typography.muted}>
             탈퇴하면 다시 로그인할 수 없습니다. 워크스페이스 등 데이터는 즉시 조회할 수 없게 되며, 같은
@@ -69,7 +63,7 @@ export default function AccountScreen() {
               <Button label="정말 탈퇴" variant="danger" onPress={handleWithdraw} loading={withdrawing} />
             </View>
           )}
-        </View>
+        </Card>
       </View>
     </ScreenContainer>
   );

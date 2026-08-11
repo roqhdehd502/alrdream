@@ -3,6 +3,7 @@ import { Link, useParams } from "react-router-dom";
 import { membersApi } from "../api/members";
 import { ApiError } from "../api/client";
 import { Pagination } from "../components/Pagination";
+import { PageHeader } from "../components/PageHeader";
 import { EmptyState, ErrorAlert, Loading } from "../components/Feedback";
 import type { MemberAdminResponse, WorkspaceResponse } from "../types";
 
@@ -56,14 +57,10 @@ export function UserDetailPage() {
 
   return (
     <div>
-      <div className="page-header">
-        <div>
-          <Link to="/users" style={{ fontSize: 13, fontWeight: 600 }}>
-            ← 사용자 목록으로
-          </Link>
-          <h1 style={{ marginTop: 10 }}>{member?.email ?? "사용자 상세"}</h1>
-        </div>
-      </div>
+      <Link to="/users" style={{ fontSize: 13, fontWeight: 600, marginBottom: 10, display: "inline-block" }}>
+        ← 사용자 목록으로
+      </Link>
+      <PageHeader title={member?.email ?? "사용자 상세"} />
 
       <ErrorAlert message={error} />
 
@@ -94,7 +91,7 @@ export function UserDetailPage() {
         </div>
       )}
 
-      <h3 style={{ fontSize: 15 }}>워크스페이스</h3>
+      <h3 className="section-heading">워크스페이스</h3>
       {workspaces === null ? (
         <Loading />
       ) : workspaces.length === 0 ? (
@@ -115,7 +112,9 @@ export function UserDetailPage() {
                 {workspaces.map((ws) => (
                   <tr key={ws.id}>
                     <td>{ws.name}</td>
-                    <td>{ws.status}</td>
+                    <td>
+                      <span className={`badge ${ws.status === "ACTIVE" ? "badge-success" : ""}`}>{ws.status}</span>
+                    </td>
                     <td>{formatDate(ws.createdAt)}</td>
                     <td>{formatDate(ws.updatedAt)}</td>
                   </tr>

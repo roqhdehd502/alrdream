@@ -13,7 +13,7 @@ export function SurveyTextField({ question, answer, onChange }: FieldProps) {
       borderRadius: radius.sm,
       paddingVertical: 10,
       paddingHorizontal: 12,
-      fontSize: 14.5,
+      fontSize: 15,
       color: colors.text,
       backgroundColor: colors.surface,
     },

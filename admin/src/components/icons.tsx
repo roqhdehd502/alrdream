@@ -66,3 +66,12 @@ export function MoonIcon({ size = 17 }: IconProps) {
     </svg>
   );
 }
+
+export function InboxIcon({ size = 17 }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" {...base}>
+      <path d="M3 12h4l2 3h6l2-3h4" />
+      <path d="M5.5 5h13l2.5 7v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-7z" />
+    </svg>
+  );
+}

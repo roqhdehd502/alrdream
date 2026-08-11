@@ -6,6 +6,7 @@ import { designApi } from "../../api/design";
 import { surveysApi } from "../../api/surveys";
 import { ApiError } from "../../api/client";
 import { Button } from "../ui/Button";
+import { Card } from "../ui/Card";
 import { EmptyState, ErrorBanner, Loading } from "../ui/Feedback";
 import { useTheme, useThemedStyles } from "../ui/ThemeContext";
 import { VersionList } from "./VersionList";
@@ -19,13 +20,13 @@ import type { AnalysisVersionSummary, DesignVersionDetail, DesignVersionSummary,
 export function DesignTab({ workspaceId, planningVersionId }: { workspaceId: string; planningVersionId: string | null }) {
   const router = useRouter();
   const { typography } = useTheme();
-  const styles = useThemedStyles((colors) => ({
+  const styles = useThemedStyles(() => ({
     wrap: { gap: 16 },
     detailHeader: { flexDirection: "row" as const, alignItems: "center" as const, justifyContent: "space-between" as const },
     backButton: { alignSelf: "flex-start" as const },
     actions: { gap: 10 },
     deleteLink: { alignSelf: "flex-start" as const },
-    confirmRow: { gap: 10, backgroundColor: colors.dangerSoft, padding: 14, borderRadius: 12 },
+    confirmRow: { gap: 10 },
     confirmButtons: { flexDirection: "row" as const, gap: 10 },
   }));
   const [analysisVersion, setAnalysisVersion] = useState<AnalysisVersionSummary | null | undefined>(undefined);
@@ -263,13 +264,13 @@ export function DesignTab({ workspaceId, planningVersionId }: { workspaceId: str
         {!confirmingDelete ? (
           <Button label="삭제" variant="ghost" onPress={() => setConfirmingDelete(true)} style={styles.deleteLink} />
         ) : (
-          <View style={styles.confirmRow}>
+          <Card tone="danger" style={styles.confirmRow}>
             <Text style={typography.muted}>정말 삭제할까요? 이 작업은 되돌릴 수 없습니다.</Text>
             <View style={styles.confirmButtons}>
               <Button label="취소" variant="secondary" onPress={() => setConfirmingDelete(false)} />
               <Button label="삭제" variant="danger" onPress={handleDelete} loading={busy} />
             </View>
-          </View>
+          </Card>
         )}
       </View>
     );

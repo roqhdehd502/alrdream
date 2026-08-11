@@ -1,8 +1,18 @@
 import { View, type StyleProp, type ViewStyle } from "react-native";
 import { useThemedStyles } from "./ThemeContext";
-import { radius, spacing } from "./theme";
+import { radius, shadows, spacing } from "./theme";
 
-export function Card({ children, style }: { children: React.ReactNode; style?: StyleProp<ViewStyle> }) {
+type Tone = "default" | "danger";
+
+export function Card({
+  children,
+  tone = "default",
+  style,
+}: {
+  children: React.ReactNode;
+  tone?: Tone;
+  style?: StyleProp<ViewStyle>;
+}) {
   const styles = useThemedStyles((colors) => ({
     card: {
       backgroundColor: colors.surface,
@@ -11,7 +21,14 @@ export function Card({ children, style }: { children: React.ReactNode; style?: S
       borderRadius: radius.md,
       padding: spacing(4),
       gap: spacing(2),
+      ...shadows.sm,
+    },
+    danger: {
+      backgroundColor: colors.dangerSoft,
+      borderColor: colors.dangerSoft,
+      shadowOpacity: 0,
+      elevation: 0,
     },
   }));
-  return <View style={[styles.card, style]}>{children}</View>;
+  return <View style={[styles.card, tone === "danger" && styles.danger, style]}>{children}</View>;
 }

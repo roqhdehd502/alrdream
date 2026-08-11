@@ -1260,10 +1260,69 @@ number, totalElements, totalPages}}` 형태 응답 확인.
 
 # Phase 17: 후속 업데이트 - 2
 
-> 현재 서비스의 UI의 퀄리티가 낮은 관계로 더욱 심미적으로 개선한다.
+> 현재 서비스의 UI의 퀄리티가 낮은 관계로 심미적으로 전면 개편 한다.
 
-- [ ] admin을 대상으로 전체 UI 개선
-- [ ] frontend를 대상으로 전체 UI 개선
+- [x] admin을 대상으로 전체 UI 개선
+- [x] frontend를 대상으로 전체 UI 개선
+
+## 작업 내용 (admin)
+
+실제로 로그인해 Dashboard/Users 화면을 스크린샷으로 확인한 결과, 원인은 "디자인 시스템 부재"가 아니라
+`admin/src/index.css`에 이미 정의된 색상/그림자 토큰(`docs/05_color_and_font.md` 기준)이 거의 쓰이지 않고
+있었던 것 — 구조 개편이 아닌 **톤앤매너 폴리싱**으로 범위를 좁혀 진행(사용자 확인: Admin 먼저 / 폴리싱 수준 /
+기존 브랜드 가이드 기준).
+
+- `index.css` 중심으로 개선(공용 클래스라 6개 페이지에 자동 전파): `.btn`/`.btn-primary`/`.theme-toggle-fab`에
+  그림자 추가, 네이티브 `<select>`에 커스텀 chevron·appearance reset 적용(+ `.form-field select`와의 중복
+  선언 정리), `.stat-value-success/-warning/-danger` 상태색 modifier, 중첩 카드용 `.card--nested`(recessed
+  패널), 반복되던 인라인 `width:100%` 대체용 `.btn-block`, 반복되던 `justify-content:space-between` 헤더
+  패턴 대체용 `.card-header`, 카드 밖 제목용 `.section-heading`, 아이콘 슬롯이 생긴 `.empty-state`.
+- `Feedback.tsx`의 `EmptyState`에 `icon?` prop 추가(기본값: 신규 `InboxIcon`) — 5개 호출부 모두 자동 적용.
+- `DashboardPage.tsx` 통계 카드에 상태색 적용(결제 성공/실패, 정상 결제 중/대기·실패/해지됨).
+- `UserDetailPage.tsx`가 다른 5개 페이지와 다르게 `<PageHeader>`를 안 쓰고 손으로 마크업을 만들고 있던 것을
+  통일, 워크스페이스 상태 컬럼에 배지 적용(`WorkspaceStatus` enum이 현재 `ACTIVE` 하나뿐이라 실사용 시
+  분기는 없지만 다른 상태 컬럼과 시각적 일관성은 맞춤).
+- `PromptTemplatesPage.tsx`/`SurveyDefinitionsPage.tsx` 미리보기 헤더에 `.card-header`, `SurveyDefinitionsPage`의
+  `QuestionEditor`(카드 안에 중첩되는 카드)에 `.card--nested` 적용.
+- Playwright로 라이트/다크 테마 각각 Dashboard/Users/UserDetail/PromptTemplates/SurveyDefinitions 실측
+  확인 — 다크 테마에서 `.card--nested`의 recessed 효과가 뚜렷하게 드러남(라이트 테마는 surface/bg 색상
+  차이가 원래 작아 대비가 상대적으로 은은함, 토큰 값 자체는 기존 브랜드 가이드 그대로라 이번 스코프에서
+  건드리지 않음).
+- `admin/src/pages/UsersPage.tsx`는 별도 JSX 변경 없이 CSS 개선만으로 자동 적용됨.
+
+## 작업 내용 (frontend)
+
+Admin과 동일한 패턴이었다 — `frontend/src/components/ui/theme.ts`에 색상/radius/spacing/폰트 토큰은
+브랜드 가이드대로 잘 정의돼 있는데 **그림자(shadow/elevation) 토큰이 아예 없었음**. 앱 전체에서 그림자를
+쓰는 곳은 `ThemeMenuButton`(드롭다운)과 `JobCompletionBanner`(토스트) 2곳뿐이었고 그마저 값이 하드코딩돼
+서로 달랐다. 기본 `Card`/`Button`은 완전히 flat. 여기에 더해 "위험 확인 박스"(회원탈퇴/버전·워크스페이스
+삭제)가 5개 파일에 미세하게 다른 두 모양으로 중복 구현돼 있었다. Admin과 동일하게 **톤앤매너 폴리싱**
+범위로 진행(레이아웃/네비게이션 구조 변경 없음).
+
+- `theme.ts`에 `shadows.sm/md/lg` 토큰 추가 — `radius`/`spacing`과 같은 층위. `lg`는 `ThemeMenuButton`의
+  기존 하드코딩 값과 동일(시각적 변화 없이 토큰화만), `md`는 `JobCompletionBanner`의 값과 거의 동일하게
+  맞춰 두 파일 모두 토큰 재사용으로 리팩터링.
+- `Card.tsx`에 기본 그림자(`shadows.sm`) 적용(공용 컴포넌트라 워크스페이스 목록/버전 목록/설문 옵션 등
+  전체에 자동 전파) + `tone?: "default" | "danger"` prop 추가. 이 `tone="danger"`로 `account.tsx`,
+  `SettingsTab.tsx`(각각 `dangerSection`), `PlanningTab`/`AnalysisTab`/`DesignTab`(각각 `confirmRow`) — 5곳의
+  중복된 위험 확인 박스 스타일을 전부 `<Card tone="danger">`로 교체하고 로컬 스타일 정의를 삭제했다.
+- `Button.tsx`의 `primary`/`secondary`/`danger` variant에 그림자 적용(`ghost`는 배경이 투명이라 제외).
+- `Feedback.tsx`의 `EmptyState`에 `icon?` prop 추가(기본값: 신규 `InboxIcon`, `icons.tsx`에 추가) — admin의
+  동일 변경과 같은 패턴. PlanningTab/AnalysisTab/DesignTab의 9개 호출부는 label만 넘기던 걸 그대로 둬도
+  기본 아이콘이 자동으로 붙는다.
+- `generating.tsx`가 `ScreenContainer`/상태색 없이 손으로 만든 화면이었던 것을 정리 — `ScreenContainer
+  scroll={false}`로 교체(태블릿/데스크톱 반응형 폭 제한도 자동으로 따라옴), 상태 텍스트에 tone 색상
+  적용(PROCESSING/PENDING→primary, FAILED→danger). `StatusBadge`처럼 별도 `Badge` 컴포넌트로 바꾸는 대신
+  기존 큰 heading 타이포그래피는 유지한 채 색상만 입혔다 — 전체 화면 히어로 텍스트를 작은 pill(`Badge`,
+  12px)로 바꾸면 시각적 위계가 오히려 후퇴하는 문제가 있어, 계획 원안(Badge로 교체)의 취지(상태를 무채색
+  텍스트로 방치하지 않기)는 지키되 구현 방식만 이 화면 맥락에 맞게 조정했다.
+- `components/survey/TextField.tsx`의 `fontSize: 14.5`를 `Field.tsx`와 동일한 `15`로 통일.
+- `PlanningTab`/`AnalysisTab`/`DesignTab`에서 `confirmRow`가 `useThemedStyles(colors => ...)`의 유일한
+  `colors` 사용처였어서, 스타일 제거 후 `colors` 매개변수도 함께 제거(미사용 변수 방지).
+- `npx tsc --noEmit`/`npx expo lint` 클린. Playwright로 웹 빌드 로그인 후 라이트/다크 각각 워크스페이스
+  목록(빈 상태 아이콘), 계정 화면(위험 확인 박스), 새 워크스페이스 생성 화면(브랜치 선택 카드 그림자)을
+  실측 확인 — 다크 테마에서 카드 그림자와 위험 박스의 붉은 톤 대비가 뚜렷하게 드러남. `generating.tsx`는
+  실제 AI 생성을 트리거하지 않고 코드 리뷰로 대체(비용/시간 문제).
 
 ---
 

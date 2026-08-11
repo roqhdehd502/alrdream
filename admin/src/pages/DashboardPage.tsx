@@ -128,9 +128,15 @@ export function DashboardPage() {
         <div className="stat-card">
           <div className="stat-label">이번 달 결제 성공/실패</div>
           <div className="stat-value">
-            {dashboardSummary
-              ? `${dashboardSummary.paymentsSucceededThisMonth} / ${dashboardSummary.paymentsFailedThisMonth}`
-              : "-"}
+            {dashboardSummary ? (
+              <>
+                <span className="stat-value-success">{dashboardSummary.paymentsSucceededThisMonth}</span>
+                {" / "}
+                <span className="stat-value-danger">{dashboardSummary.paymentsFailedThisMonth}</span>
+              </>
+            ) : (
+              "-"
+            )}
           </div>
         </div>
       </div>
@@ -138,15 +144,15 @@ export function DashboardPage() {
       <div className="card-grid">
         <div className="stat-card">
           <div className="stat-label">정상 결제 중</div>
-          <div className="stat-value">{summary?.activeCount ?? "-"}</div>
+          <div className="stat-value stat-value-success">{summary?.activeCount ?? "-"}</div>
         </div>
         <div className="stat-card">
           <div className="stat-label">결제 대기/실패</div>
-          <div className="stat-value">{summary?.pastDueCount ?? "-"}</div>
+          <div className="stat-value stat-value-warning">{summary?.pastDueCount ?? "-"}</div>
         </div>
         <div className="stat-card">
           <div className="stat-label">해지됨</div>
-          <div className="stat-value">{summary?.canceledCount ?? "-"}</div>
+          <div className="stat-value stat-value-danger">{summary?.canceledCount ?? "-"}</div>
         </div>
       </div>
 

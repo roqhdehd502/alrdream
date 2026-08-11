@@ -47,3 +47,12 @@ export function MoonIcon({ size = 17, color }: StrokeIconProps) {
     </Svg>
   );
 }
+
+export function InboxIcon({ size = 17, color }: StrokeIconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
+      <Path d="M3 12h4l2 3h6l2-3h4" />
+      <Path d="M5.5 5h13l2.5 7v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-7z" />
+    </Svg>
+  );
+}

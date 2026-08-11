@@ -2,6 +2,7 @@ import { Pressable, Text, View } from "react-native";
 import { usePathname, useRouter, type Href } from "expo-router";
 import { useJobPolling } from "./JobPollingContext";
 import { useTheme, useThemedStyles } from "../ui/ThemeContext";
+import { shadows } from "../ui/theme";
 
 /**
  * Phase 16 — 생성 화면(/generating)을 벗어난 뒤 작업이 완료/실패됐을 때 전역으로 보여주는 배너.
@@ -26,11 +27,7 @@ export function JobCompletionBanner() {
       backgroundColor: colors.surface,
       borderWidth: 1,
       borderColor: colors.border,
-      shadowColor: "#000",
-      shadowOpacity: 0.15,
-      shadowRadius: 10,
-      shadowOffset: { width: 0, height: 4 },
-      elevation: 6,
+      ...shadows.md,
     },
     text: { flex: 1 },
     closeButton: { padding: 4 },

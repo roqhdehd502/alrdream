@@ -122,7 +122,7 @@ export function LoginPage() {
                 </div>
               )}
               {info && <div className="alert alert-success">{info}</div>}
-              <button type="submit" className="btn btn-primary" style={{ width: "100%" }} disabled={submitting}>
+              <button type="submit" className="btn btn-primary btn-block" disabled={submitting}>
                 {submitting ? "로그인 중..." : "로그인"}
               </button>
             </form>
@@ -160,7 +160,7 @@ export function LoginPage() {
                   {error}
                 </div>
               )}
-              <button type="submit" className="btn btn-primary" style={{ width: "100%" }} disabled={submitting}>
+              <button type="submit" className="btn btn-primary btn-block" disabled={submitting}>
                 {submitting ? "요청 중..." : "재설정 코드 받기"}
               </button>
             </form>
@@ -204,7 +204,7 @@ export function LoginPage() {
                   {error}
                 </div>
               )}
-              <button type="submit" className="btn btn-primary" style={{ width: "100%" }} disabled={submitting}>
+              <button type="submit" className="btn btn-primary btn-block" disabled={submitting}>
                 {submitting ? "재설정 중..." : "비밀번호 재설정"}
               </button>
             </form>

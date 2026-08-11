@@ -4,6 +4,7 @@ import { useRouter } from "expo-router";
 import { workspacesApi } from "../../api/workspaces";
 import { ApiError } from "../../api/client";
 import { Button } from "../ui/Button";
+import { Card } from "../ui/Card";
 import { Field } from "../ui/Field";
 import { ErrorBanner } from "../ui/Feedback";
 import { useTheme, useThemedStyles, type ThemePreference } from "../ui/ThemeContext";
@@ -35,14 +36,7 @@ export function SettingsTab({ workspace, onRenamed }: { workspace: Workspace; on
     themeOptionActive: { borderColor: colors.primary, backgroundColor: colors.primarySoft },
     themeOptionLabel: { fontSize: 13.5, fontFamily: fontFamily.medium, color: colors.textMuted },
     themeOptionLabelActive: { color: colors.primaryHover, fontFamily: fontFamily.semibold },
-    dangerSection: {
-      gap: 10,
-      borderWidth: 1,
-      borderColor: colors.dangerSoft,
-      backgroundColor: colors.dangerSoft,
-      padding: 16,
-      borderRadius: 14,
-    },
+    dangerSection: { gap: 10 },
     dangerHeading: { color: colors.danger },
     confirmButtons: { flexDirection: "row" as const, gap: 10 },
   }));
@@ -109,7 +103,7 @@ export function SettingsTab({ workspace, onRenamed }: { workspace: Workspace; on
         </View>
       </View>
 
-      <View style={styles.dangerSection}>
+      <Card tone="danger" style={styles.dangerSection}>
         <Text style={[typography.heading, styles.dangerHeading]}>워크스페이스 삭제</Text>
         <Text style={typography.muted}>삭제하면 이 워크스페이스의 기획/분석/설계 내역에 더 이상 접근할 수 없습니다.</Text>
         {!confirmingDelete ? (
@@ -120,7 +114,7 @@ export function SettingsTab({ workspace, onRenamed }: { workspace: Workspace; on
             <Button label="정말 삭제" variant="danger" onPress={handleDelete} loading={deleting} />
           </View>
         )}
-      </View>
+      </Card>
     </View>
   );
 }

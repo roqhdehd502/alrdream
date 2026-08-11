@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Text, type StyleProp, type ViewStyle } from "react-native";
 import { useTheme, useThemedStyles } from "./ThemeContext";
-import { fontFamily, radius } from "./theme";
+import { fontFamily, radius, shadows } from "./theme";
 
 type Variant = "primary" | "secondary" | "danger" | "ghost";
 
@@ -18,9 +18,9 @@ interface ButtonProps {
 export function Button({ label, onPress, variant = "primary", disabled, loading, icon, style }: ButtonProps) {
   const { colors } = useTheme();
   const variantStyles = useThemedStyles((colors) => ({
-    primary: { backgroundColor: colors.primary },
-    secondary: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
-    danger: { backgroundColor: colors.danger },
+    primary: { backgroundColor: colors.primary, ...shadows.sm },
+    secondary: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, ...shadows.sm },
+    danger: { backgroundColor: colors.danger, ...shadows.sm },
     ghost: { backgroundColor: "transparent" },
   }));
   const textStyles = useThemedStyles((colors) => ({
@@ -70,6 +70,8 @@ const styles = StyleSheet.create({
   },
   disabled: {
     opacity: 0.5,
+    shadowOpacity: 0,
+    elevation: 0,
   },
   pressed: {
     opacity: 0.85,

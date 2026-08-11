@@ -49,14 +49,14 @@ export function Layout() {
           <div className="sidebar-user">{member?.email}</div>
           <button
             type="button"
-            className="btn"
-            style={{ width: "100%", marginBottom: 8 }}
+            className="btn btn-block"
+            style={{ marginBottom: 8 }}
             onClick={handleToggleTheme}
           >
             {theme === "dark" ? <SunIcon size={15} /> : <MoonIcon size={15} />}
             {theme === "dark" ? "라이트 모드" : "다크 모드"}
           </button>
-          <button type="button" className="btn" style={{ width: "100%" }} onClick={logout}>
+          <button type="button" className="btn btn-block" onClick={logout}>
             로그아웃
           </button>
         </div>
