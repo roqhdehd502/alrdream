@@ -8,7 +8,7 @@ function AccountButton() {
   const router = useRouter();
   const { colors } = useTheme();
   return (
-    <View style={{ flexDirection: "row", alignItems: "center", gap: 14 }}>
+    <View style={{ flexDirection: "row", alignItems: "center", gap: 14, paddingRight: 16 }}>
       <ThemeMenuButton />
       <Pressable onPress={() => router.push("/account")} hitSlop={10}>
         <Text style={{ color: colors.primary, fontSize: 14, fontFamily: fontFamily.semibold }}>계정</Text>

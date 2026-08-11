@@ -1311,7 +1311,7 @@ Admin과 동일한 패턴이었다 — `frontend/src/components/ui/theme.ts`에 
   동일 변경과 같은 패턴. PlanningTab/AnalysisTab/DesignTab의 9개 호출부는 label만 넘기던 걸 그대로 둬도
   기본 아이콘이 자동으로 붙는다.
 - `generating.tsx`가 `ScreenContainer`/상태색 없이 손으로 만든 화면이었던 것을 정리 — `ScreenContainer
-  scroll={false}`로 교체(태블릿/데스크톱 반응형 폭 제한도 자동으로 따라옴), 상태 텍스트에 tone 색상
+scroll={false}`로 교체(태블릿/데스크톱 반응형 폭 제한도 자동으로 따라옴), 상태 텍스트에 tone 색상
   적용(PROCESSING/PENDING→primary, FAILED→danger). `StatusBadge`처럼 별도 `Badge` 컴포넌트로 바꾸는 대신
   기존 큰 heading 타이포그래피는 유지한 채 색상만 입혔다 — 전체 화면 히어로 텍스트를 작은 pill(`Badge`,
   12px)로 바꾸면 시각적 위계가 오히려 후퇴하는 문제가 있어, 계획 원안(Badge로 교체)의 취지(상태를 무채색
@@ -1326,7 +1326,13 @@ Admin과 동일한 패턴이었다 — `frontend/src/components/ui/theme.ts`에 
 
 ---
 
-# Phase 18: 기능 및 비기능 전체 점검 - 2
+# Phase 18: 후속 업데이트 - 3
+
+> 현재 도메인에서 기획에서 누락된 부분을 확인하고 추가한다.
+
+---
+
+# Phase 19: 기능 및 비기능 전체 점검 - 2
 
 ## 작업 항목
 

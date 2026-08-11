@@ -52,7 +52,7 @@ export default function WorkspaceListScreen() {
   return (
     <ScreenContainer scroll={false}>
       <View style={styles.headerRow}>
-        <Field placeholder="워크스페이스 검색" value={keyword} onChangeText={setKeyword} style={styles.search} />
+        <Field placeholder="워크스페이스 검색" value={keyword} onChangeText={setKeyword} containerStyle={styles.search} />
         <Button label="+ 새 워크스페이스" onPress={() => router.push("/workspaces/new")} />
       </View>
 
