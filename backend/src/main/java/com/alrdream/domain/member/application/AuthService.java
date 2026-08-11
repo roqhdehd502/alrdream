@@ -6,6 +6,7 @@ import com.alrdream.domain.member.domain.MemberRepository;
 import com.alrdream.domain.member.infrastructure.AppleIdTokenVerifierAdapter;
 import com.alrdream.domain.member.infrastructure.GoogleIdTokenVerifierAdapter;
 import com.alrdream.domain.member.infrastructure.OAuthUserInfo;
+import com.alrdream.global.error.ForbiddenException;
 import com.alrdream.global.security.JwtTokenProvider;
 import com.alrdream.global.security.RefreshTokenStore;
 import io.jsonwebtoken.Claims;
@@ -58,6 +59,7 @@ public class AuthService {
 				|| !passwordEncoder.matches(rawPassword, member.getPasswordHash())) {
 			throw new IllegalArgumentException("이메일 또는 비밀번호가 올바르지 않습니다.");
 		}
+		checkNotBanned(member);
 		return issueTokens(member);
 	}
 
@@ -71,6 +73,7 @@ public class AuthService {
 
 		Member member = memberRepository.findByProviderAndProviderId(provider, userInfo.providerId())
 				.orElseGet(() -> registerOAuthMember(provider, userInfo));
+		checkNotBanned(member);
 		return issueTokens(member);
 	}
 
@@ -101,12 +104,20 @@ public class AuthService {
 
 		Member member = memberRepository.findById(memberId)
 				.orElseThrow(() -> new IllegalArgumentException("존재하지 않는 회원입니다."));
+		checkNotBanned(member);
 		return issueTokens(member);
 	}
 
 	@Transactional
 	public void logout(UUID memberId) {
 		refreshTokenStore.invalidate(memberId);
+	}
+
+	/** Phase 19 — 제재된 계정은 이미 유효한 자격증명/refresh token이 있어도 새 토큰을 발급받을 수 없다. */
+	private void checkNotBanned(Member member) {
+		if (member.isBanned()) {
+			throw new ForbiddenException(member.banMessage(), "ACCOUNT_BANNED");
+		}
 	}
 
 	private TokenIssueResult issueTokens(Member member) {

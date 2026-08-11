@@ -56,3 +56,54 @@ export function InboxIcon({ size = 17, color }: StrokeIconProps) {
     </Svg>
   );
 }
+
+export function CheckIcon({ size = 14, color }: StrokeIconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
+      <Path d="M4 12.5l5.5 5.5L20 6" />
+    </Svg>
+  );
+}
+
+export function HomeIcon({ size = 17, color }: StrokeIconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
+      <Path d="M3 11.5L12 4l9 7.5" />
+      <Path d="M5.5 10v9a1 1 0 0 0 1 1h11a1 1 0 0 0 1-1v-9" />
+    </Svg>
+  );
+}
+
+export function WorkspaceIcon({ size = 17, color }: StrokeIconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
+      <Path d="M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z" />
+    </Svg>
+  );
+}
+
+export function SubscriptionIcon({ size = 17, color }: StrokeIconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
+      <Path d="M12 2l2.6 5.9 6.4.6-4.8 4.3 1.4 6.3L12 15.9 6.4 19.1l1.4-6.3-4.8-4.3 6.4-.6z" />
+    </Svg>
+  );
+}
+
+export function AccountIcon({ size = 17, color }: StrokeIconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
+      <Circle cx="12" cy="8" r="4" />
+      <Path d="M4 20c0-4 3.6-6.5 8-6.5s8 2.5 8 6.5" />
+    </Svg>
+  );
+}
+
+export function TicketIcon({ size = 17, color }: StrokeIconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
+      <Path d="M3 8.5A2.5 2.5 0 0 1 5.5 6h13A2.5 2.5 0 0 1 21 8.5v1a1.8 1.8 0 0 0 0 3v1A2.5 2.5 0 0 1 18.5 16h-13A2.5 2.5 0 0 1 3 13.5v-1a1.8 1.8 0 0 0 0-3z" />
+      <Path d="M9 6.5v9" strokeDasharray="2.2 2.2" />
+    </Svg>
+  );
+}

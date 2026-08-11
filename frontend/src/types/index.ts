@@ -9,6 +9,7 @@ export interface Member {
   email: string;
   role: MemberRole;
   plan: MemberPlan;
+  proExpiresAt: string | null;
 }
 
 export interface TokenPair {
@@ -140,6 +141,46 @@ export interface AiGenerationJob {
 export interface DocumentResponse {
   downloadUrl: string;
   generatedAt: string;
+}
+
+// ---- [01] 13번, [03] §4-7 구독/결제 ----
+
+export type SubscriptionStatus = "ACTIVE" | "PAST_DUE" | "CANCELED";
+export type PaymentStatus = "PAID" | "FAILED";
+
+export interface SubscriptionResponse {
+  id: string;
+  plan: MemberPlan;
+  status: SubscriptionStatus;
+  nextBillingAt: string | null;
+  startedAt: string;
+}
+
+export interface PaymentHistoryResponse {
+  id: string;
+  amount: number;
+  status: PaymentStatus;
+  paidAt: string | null;
+  createdAt: string;
+}
+
+export interface PricingResponse {
+  basePriceKrw: number;
+  promoPriceKrw: number | null;
+  promoEndsAt: string | null;
+  effectivePriceKrw: number;
+}
+
+export interface RedeemCouponResponse {
+  benefitDays: number;
+  proExpiresAt: string;
+}
+
+export interface UsageQuotaResponse {
+  period: string;
+  generationCount: number;
+  limitCount: number;
+  plan: MemberPlan;
 }
 
 // ---- [01] 12-4 기획안 content 구조 (prompt_templates.schema_json 기준) ----

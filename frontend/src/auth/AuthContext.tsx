@@ -14,6 +14,8 @@ interface AuthContextValue {
   loginWithGoogle: (idToken: string) => Promise<void>;
   logout: () => Promise<void>;
   withdraw: () => Promise<void>;
+  /** 쿠폰 등록/구독 시작·해지처럼 서버 쪽 plan이 바뀌는 액션 직후 호출 — member.plan을 다시 불러온다. */
+  refreshMember: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -97,9 +99,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setStatus("unauthenticated");
   }, []);
 
+  const refreshMember = useCallback(async () => {
+    setMember(await authApi.me());
+  }, []);
+
   const value = useMemo(
-    () => ({ status, member, login, signup, loginWithGoogle, logout, withdraw }),
-    [status, member, login, signup, loginWithGoogle, logout, withdraw],
+    () => ({ status, member, login, signup, loginWithGoogle, logout, withdraw, refreshMember }),
+    [status, member, login, signup, loginWithGoogle, logout, withdraw, refreshMember],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

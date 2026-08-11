@@ -13,4 +13,21 @@ export const membersApi = {
     apiFetch<PagedModel<WorkspaceResponse>>(
       `/api/admin/users/${userId}/workspaces${toQueryString({ keyword, page, size: 20 })}`,
     ),
+
+  bulkGrantPro: (userIds: string[], days: number) =>
+    apiFetch<void>("/api/admin/users/pro-grant", {
+      method: "POST",
+      body: JSON.stringify({ userIds, days }),
+    }),
+
+  downgrade: (userId: string) =>
+    apiFetch<MemberAdminResponse>(`/api/admin/users/${userId}/downgrade`, { method: "POST" }),
+
+  ban: (userId: string, permanent: boolean, until?: string) =>
+    apiFetch<MemberAdminResponse>(`/api/admin/users/${userId}/ban`, {
+      method: "POST",
+      body: JSON.stringify({ permanent, until }),
+    }),
+
+  unban: (userId: string) => apiFetch<MemberAdminResponse>(`/api/admin/users/${userId}/unban`, { method: "POST" }),
 };

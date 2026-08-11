@@ -90,7 +90,7 @@ public class AnalysisVersionController {
 			@PathVariable UUID planningVersionId,
 			@PathVariable UUID analysisVersionId) {
 		return ResponseEntity.ok(AnalysisVersionDetail.of(
-				analysisVersionService.getOwned(analysisVersionId, planningVersionId, workspaceId, principal.memberId())));
+				analysisVersionService.getForRead(analysisVersionId, planningVersionId, workspaceId, principal.memberId())));
 	}
 
 	@Operation(

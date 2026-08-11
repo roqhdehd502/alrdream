@@ -115,6 +115,17 @@ public class PlanningVersionService {
 				.orElseThrow(() -> new IllegalArgumentException("존재하지 않는 기획안입니다."));
 	}
 
+	/**
+	 * [03] §5 — "상위 버전(기획)이 소프트 삭제되어도 이를 참조하는 하위 버전(분석/설계)은 조회만 가능하고 재생성은
+	 * 막는다"를 위한 읽기 전용 조회. {@link #getOwned}와 달리 이 기획안 자체의 삭제 여부는 보지 않는다 — 분석/설계
+	 * 조회 경로에서 조상 존재 확인용으로만 쓰고, 재생성(생성/수정) 경로는 계속 {@link #getOwned}를 써야 한다.
+	 */
+	public PlanningVersion getForRead(UUID versionId, UUID workspaceId, UUID userId) {
+		workspaceService.getOwned(workspaceId, userId);
+		return planningVersionRepository.findByIdAndWorkspaceId(versionId, workspaceId)
+				.orElseThrow(() -> new IllegalArgumentException("존재하지 않는 기획안입니다."));
+	}
+
 	/** [03] §4-6 — 완료된 기획안의 PDF를 조회하거나(이미 생성됨) 새로 생성한다. */
 	@Transactional
 	public DocumentResponse generatePdf(UUID versionId, UUID workspaceId, UUID userId) {

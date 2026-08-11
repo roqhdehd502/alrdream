@@ -86,10 +86,11 @@ public class AnalysisVersionService {
 	}
 
 	public Page<AnalysisVersion> list(UUID workspaceId, UUID planningVersionId, UUID userId, Pageable pageable) {
-		planningVersionService.getOwned(planningVersionId, workspaceId, userId);
+		planningVersionService.getForRead(planningVersionId, workspaceId, userId);
 		return analysisVersionRepository.findAllByPlanningVersionIdAndDeletedAtIsNull(planningVersionId, pageable);
 	}
 
+	/** 생성/재생성 경로 전용 — 상위(기획)가 소프트 삭제됐으면 막는다. 조회 경로는 {@link #getForRead}를 쓴다. */
 	public AnalysisVersion getOwned(UUID analysisVersionId, UUID planningVersionId, UUID workspaceId, UUID userId) {
 		planningVersionService.getOwned(planningVersionId, workspaceId, userId);
 		return analysisVersionRepository
@@ -97,10 +98,21 @@ public class AnalysisVersionService {
 				.orElseThrow(() -> new IllegalArgumentException("존재하지 않는 분석입니다."));
 	}
 
+	/**
+	 * [03] §5 조회 전용 — 이 분석 자신이나 상위(기획)가 소프트 삭제됐어도 조회는 허용한다. 이 값에 의존해 새로 뭔가를
+	 * 만드는(설계 생성 등) 경로는 절대 이 메서드를 쓰면 안 되고 {@link #getOwned}를 써야 한다.
+	 */
+	public AnalysisVersion getForRead(UUID analysisVersionId, UUID planningVersionId, UUID workspaceId, UUID userId) {
+		planningVersionService.getForRead(planningVersionId, workspaceId, userId);
+		return analysisVersionRepository
+				.findByIdAndPlanningVersionId(analysisVersionId, planningVersionId)
+				.orElseThrow(() -> new IllegalArgumentException("존재하지 않는 분석입니다."));
+	}
+
 	/** [03] §4-6 — 완료된 분석의 PDF를 조회하거나(이미 생성됨) 새로 생성한다. */
 	@Transactional
 	public DocumentResponse generatePdf(UUID analysisVersionId, UUID planningVersionId, UUID workspaceId, UUID userId) {
-		AnalysisVersion version = getOwned(analysisVersionId, planningVersionId, workspaceId, userId);
+		AnalysisVersion version = getForRead(analysisVersionId, planningVersionId, workspaceId, userId);
 		if (version.getStatus() != AnalysisVersionStatus.COMPLETED) {
 			throw new IllegalArgumentException("생성이 완료된 분석만 PDF로 내려받을 수 있습니다.");
 		}

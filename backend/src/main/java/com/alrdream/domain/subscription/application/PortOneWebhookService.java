@@ -1,6 +1,5 @@
 package com.alrdream.domain.subscription.application;
 
-import com.alrdream.domain.member.domain.Member;
 import com.alrdream.domain.member.domain.MemberPlan;
 import com.alrdream.domain.member.domain.MemberRepository;
 import com.alrdream.domain.subscription.domain.PaymentHistory;
@@ -44,25 +43,25 @@ public class PortOneWebhookService {
 	private final SubscriptionRepository subscriptionRepository;
 	private final PaymentHistoryRepository paymentHistoryRepository;
 	private final MemberRepository memberRepository;
+	private final SubscriptionPricingService subscriptionPricingService;
 	private final String webhookSecret;
 	private final String channelKey;
-	private final long proMonthlyPriceKrw;
 
 	public PortOneWebhookService(
 			PaymentClient paymentClient,
 			SubscriptionRepository subscriptionRepository,
 			PaymentHistoryRepository paymentHistoryRepository,
 			MemberRepository memberRepository,
+			SubscriptionPricingService subscriptionPricingService,
 			@Value("${app.portone.webhook-secret}") String webhookSecret,
-			@Value("${app.portone.channel-key}") String channelKey,
-			@Value("${app.portone.pro-monthly-price-krw}") long proMonthlyPriceKrw) {
+			@Value("${app.portone.channel-key}") String channelKey) {
 		this.paymentClient = paymentClient;
 		this.subscriptionRepository = subscriptionRepository;
 		this.paymentHistoryRepository = paymentHistoryRepository;
 		this.memberRepository = memberRepository;
+		this.subscriptionPricingService = subscriptionPricingService;
 		this.webhookSecret = webhookSecret;
 		this.channelKey = channelKey;
-		this.proMonthlyPriceKrw = proMonthlyPriceKrw;
 	}
 
 	/**
@@ -137,9 +136,10 @@ public class PortOneWebhookService {
 		subscription.markPastDue();
 
 		// 결제 실패 시 즉시 Pro 권한을 회수한다 — 재시도/알림 정책은 [03] §4-7에 구체적으로 명시돼 있지 않아
-		// 이번 phase 스코프에서는 다루지 않는다(04_milestone.md 설계 결정 참고).
+		// 이번 phase 스코프에서는 다루지 않는다(04_milestone.md 설계 결정 참고). 단, 쿠폰 등으로 구독과 별개로
+		// 보장된 기간(proExpiresAt)이 남아있으면 회수하지 않는다(Phase 19, Member#syncPlanFromSubscriptionEnd).
 		memberRepository.findById(subscription.getUserId()).ifPresent(member -> {
-			member.changePlan(MemberPlan.FREE);
+			member.syncPlanFromSubscriptionEnd();
 			memberRepository.save(member);
 		});
 	}
@@ -155,12 +155,17 @@ public class PortOneWebhookService {
 
 	private void rescheduleNextPayment(UUID subscriptionId, String billingKey, OffsetDateTime nextBillingAt) {
 		String nextPaymentId = PaymentIds.generate(subscriptionId);
-		PaymentAmountInput amount = new PaymentAmountInput(proMonthlyPriceKrw, null, null);
+		PaymentAmountInput amount = new PaymentAmountInput(subscriptionPricingService.getEffectivePriceKrw(), null, null);
 		BillingKeyPaymentScheduleInput scheduleInput = new BillingKeyPaymentScheduleInput(
 				null, billingKey, channelKey, ORDER_NAME, null, null, amount, Currency.Krw.INSTANCE,
 				null, null, null, null, null, null, null, null, null, null, null, null, null);
 		paymentClient.getPaymentSchedule()
 				.createPaymentSchedule(nextPaymentId, scheduleInput, nextBillingAt.toInstant())
 				.join();
+
+		// 방금 등록한 예약 ID를 저장해둬야 이후 사용자가 해지할 때 이 예약을 PortOne에서 취소(revoke)할 수 있다
+		// ([03] §4-7 반복 체이닝 — SubscriptionService#cancelActiveSubscription 참고).
+		subscriptionRepository.findById(subscriptionId)
+				.ifPresent(subscription -> subscription.scheduleNextBilling(nextBillingAt, nextPaymentId));
 	}
 }

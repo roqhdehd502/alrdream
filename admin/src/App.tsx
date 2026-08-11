@@ -4,6 +4,11 @@ import { Layout } from "./components/Layout";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { LoginPage } from "./pages/LoginPage";
 import { DashboardPage } from "./pages/DashboardPage";
+import { SubscriptionManagementPage } from "./pages/SubscriptionManagementPage";
+import { PromptQuotaPage } from "./pages/PromptQuotaPage";
+import { PaymentsPage } from "./pages/PaymentsPage";
+import { CouponsPage } from "./pages/CouponsPage";
+import { CouponRedemptionsPage } from "./pages/CouponRedemptionsPage";
 import { SurveyDefinitionsPage } from "./pages/SurveyDefinitionsPage";
 import { PromptTemplatesPage } from "./pages/PromptTemplatesPage";
 import { UsersPage } from "./pages/UsersPage";
@@ -23,6 +28,11 @@ function App() {
             }
           >
             <Route path="/dashboard" element={<DashboardPage />} />
+            <Route path="/subscriptions" element={<SubscriptionManagementPage />} />
+            <Route path="/prompt-quota" element={<PromptQuotaPage />} />
+            <Route path="/payments" element={<PaymentsPage />} />
+            <Route path="/coupons" element={<CouponsPage />} />
+            <Route path="/coupons/redemptions" element={<CouponRedemptionsPage />} />
             <Route path="/surveys" element={<SurveyDefinitionsPage />} />
             <Route path="/prompt-templates" element={<PromptTemplatesPage />} />
             <Route path="/users" element={<UsersPage />} />

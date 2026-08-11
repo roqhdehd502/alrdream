@@ -23,7 +23,11 @@ const TABS: { key: TabKey; label: string }[] = [
 ];
 
 export default function WorkspaceDetailScreen() {
-  const { id, tab: initialTab } = useLocalSearchParams<{ id: string; tab?: TabKey }>();
+  const { id, tab: initialTab, analysisVersionId } = useLocalSearchParams<{
+    id: string;
+    tab?: TabKey;
+    analysisVersionId?: string;
+  }>();
   const navigation = useNavigation();
   const { typography } = useTheme();
   const styles = useThemedStyles((colors) => ({
@@ -114,7 +118,13 @@ export default function WorkspaceDetailScreen() {
         />
       )}
       {tab === "analysis" && <AnalysisTab workspaceId={id} planningVersionId={latestCompletedPlanningId} />}
-      {tab === "design" && <DesignTab workspaceId={id} planningVersionId={latestCompletedPlanningId} />}
+      {tab === "design" && (
+        <DesignTab
+          workspaceId={id}
+          planningVersionId={latestCompletedPlanningId}
+          preferredAnalysisVersionId={analysisVersionId ?? null}
+        />
+      )}
       {tab === "settings" && <SettingsTab workspace={workspace} onRenamed={setWorkspace} />}
     </ScreenContainer>
   );

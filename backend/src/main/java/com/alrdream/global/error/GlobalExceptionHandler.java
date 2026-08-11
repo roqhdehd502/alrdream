@@ -83,6 +83,12 @@ public class GlobalExceptionHandler {
 				.body(new ErrorResponse(e.getCode(), e.getMessage()));
 	}
 
+	// [01] 13번 Pro 전용 기능(설계 문서 export 등)을 FREE 플랜이 시도한 경우.
+	@ExceptionHandler(ForbiddenException.class)
+	public ResponseEntity<ErrorResponse> handleForbidden(ForbiddenException e) {
+		return ResponseEntity.status(HttpStatus.FORBIDDEN).body(new ErrorResponse(e.getCode(), e.getMessage()));
+	}
+
 	@ExceptionHandler(Exception.class)
 	public ResponseEntity<ErrorResponse> handleUnexpected(Exception e) {
 		log.error("예기치 못한 오류가 발생했습니다.", e);

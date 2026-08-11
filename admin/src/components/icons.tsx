@@ -67,6 +67,41 @@ export function MoonIcon({ size = 17 }: IconProps) {
   );
 }
 
+export function PaymentIcon({ size = 17 }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" {...base}>
+      <rect x="2.5" y="5" width="19" height="14" rx="2.5" />
+      <path d="M2.5 10h19" />
+      <path d="M6 14.5h4" />
+    </svg>
+  );
+}
+
+export function SubscriptionIcon({ size = 17 }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" {...base}>
+      <path d="M12 2l2.6 5.9 6.4.6-4.8 4.3 1.4 6.3L12 15.9 6.4 19.1l1.4-6.3-4.8-4.3 6.4-.6z" />
+    </svg>
+  );
+}
+
+export function QuotaIcon({ size = 17 }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" {...base}>
+      <path d="M9 3v18M15 3v18M4 8h16M4 16h16" />
+    </svg>
+  );
+}
+
+export function CouponIcon({ size = 17 }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" {...base}>
+      <path d="M3 8.5A2.5 2.5 0 0 1 5.5 6h13A2.5 2.5 0 0 1 21 8.5v1a1.8 1.8 0 0 0 0 3v1A2.5 2.5 0 0 1 18.5 16h-13A2.5 2.5 0 0 1 3 13.5v-1a1.8 1.8 0 0 0 0-3z" />
+      <path d="M9 6.5v9" strokeDasharray="2.2 2.2" />
+    </svg>
+  );
+}
+
 export function InboxIcon({ size = 17 }: IconProps) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" {...base}>

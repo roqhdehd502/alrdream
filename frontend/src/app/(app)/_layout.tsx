@@ -1,21 +1,6 @@
-import { Pressable, Text, View } from "react-native";
-import { Stack, useRouter } from "expo-router";
+import { Stack } from "expo-router";
 import { useTheme } from "../../components/ui/ThemeContext";
-import { ThemeMenuButton } from "../../components/ui/ThemeMenuButton";
 import { fontFamily } from "../../components/ui/theme";
-
-function AccountButton() {
-  const router = useRouter();
-  const { colors } = useTheme();
-  return (
-    <View style={{ flexDirection: "row", alignItems: "center", gap: 14, paddingRight: 16 }}>
-      <ThemeMenuButton />
-      <Pressable onPress={() => router.push("/account")} hitSlop={10}>
-        <Text style={{ color: colors.primary, fontSize: 14, fontFamily: fontFamily.semibold }}>계정</Text>
-      </Pressable>
-    </View>
-  );
-}
 
 export default function AppLayout() {
   const { colors } = useTheme();
@@ -28,10 +13,11 @@ export default function AppLayout() {
         headerShadowVisible: false,
       }}
     >
-      <Stack.Screen name="index" options={{ title: "내 워크스페이스", headerRight: AccountButton }} />
-      <Stack.Screen name="account" options={{ title: "계정" }} />
+      <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       <Stack.Screen name="workspaces/new" options={{ title: "새 워크스페이스" }} />
       <Stack.Screen name="workspaces/[id]" options={{ title: "워크스페이스" }} />
+      <Stack.Screen name="subscription/payments" options={{ title: "결제 내역" }} />
+      <Stack.Screen name="coupon" options={{ title: "쿠폰 등록" }} />
       <Stack.Screen name="generating" options={{ title: "생성 중", headerBackVisible: false, gestureEnabled: false }} />
     </Stack>
   );

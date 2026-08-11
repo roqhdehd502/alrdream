@@ -60,4 +60,23 @@ public class UsageQuotaService {
 		}
 		quota.increment();
 	}
+
+	/**
+	 * 사용자용 조회 전용 — {@link #checkAndIncrement}와 달리 row를 새로 만들거나 값을 바꾸지 않는다. 이번 달에
+	 * 아직 한 번도 생성하지 않아 row가 없으면 사용량 0으로 본다.
+	 */
+	@Transactional(readOnly = true)
+	public UsageQuotaSnapshot getCurrent(UUID userId) {
+		Member member = memberRepository.findById(userId)
+				.orElseThrow(() -> new IllegalArgumentException("존재하지 않는 사용자입니다."));
+		String period = YearMonth.now().toString();
+		int generationCount = usageQuotaRepository.findByUserIdAndPeriod(userId, period)
+				.map(UsageQuota::getGenerationCount)
+				.orElse(0);
+		int limitCount = freeTierSettingService.get().getMonthlyLimit();
+		return new UsageQuotaSnapshot(period, generationCount, limitCount, member.getPlan());
+	}
+
+	public record UsageQuotaSnapshot(String period, int generationCount, int limitCount, MemberPlan plan) {
+	}
 }

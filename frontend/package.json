@@ -4,6 +4,7 @@
   "version": "1.0.0",
   "dependencies": {
     "@expo/ui": "~57.0.8",
+    "@portone/browser-sdk": "^0.1.9",
     "expo": "~57.0.9",
     "expo-auth-session": "~57.0.6",
     "expo-constants": "~57.0.8",

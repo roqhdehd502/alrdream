@@ -2,13 +2,50 @@ import { useState } from "react";
 import { NavLink, Outlet } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import { getTheme, toggleTheme } from "../theme";
-import { DashboardIcon, MoonIcon, PromptIcon, SunIcon, SurveyIcon, UsersIcon } from "./icons";
+import {
+  CouponIcon,
+  DashboardIcon,
+  MoonIcon,
+  PaymentIcon,
+  PromptIcon,
+  QuotaIcon,
+  SubscriptionIcon,
+  SunIcon,
+  SurveyIcon,
+  UsersIcon,
+} from "./icons";
 
-const NAV_ITEMS = [
-  { to: "/dashboard", label: "대시보드", icon: DashboardIcon },
-  { to: "/surveys", label: "설문 정의", icon: SurveyIcon },
-  { to: "/prompt-templates", label: "AI 프롬프트 템플릿", icon: PromptIcon },
-  { to: "/users", label: "사용자", icon: UsersIcon },
+const NAV_GROUPS = [
+  {
+    label: "현황",
+    items: [{ to: "/dashboard", label: "대시보드", icon: DashboardIcon }],
+  },
+  {
+    label: "구독",
+    items: [
+      { to: "/subscriptions", label: "구독 관리", icon: SubscriptionIcon },
+      { to: "/payments", label: "결제 관리", icon: PaymentIcon },
+      { to: "/prompt-quota", label: "AI 프롬프트 횟수", icon: QuotaIcon },
+    ],
+  },
+  {
+    label: "쿠폰",
+    items: [
+      { to: "/coupons", label: "쿠폰 코드 관리", icon: CouponIcon },
+      { to: "/coupons/redemptions", label: "유저 쿠폰 사용 현황", icon: CouponIcon },
+    ],
+  },
+  {
+    label: "콘텐츠",
+    items: [
+      { to: "/surveys", label: "설문 정의", icon: SurveyIcon },
+      { to: "/prompt-templates", label: "AI 프롬프트 템플릿", icon: PromptIcon },
+    ],
+  },
+  {
+    label: "사용자",
+    items: [{ to: "/users", label: "사용자", icon: UsersIcon }],
+  },
 ];
 
 export function Layout() {
@@ -32,17 +69,21 @@ export function Layout() {
           </div>
         </div>
 
-        <div className="sidebar-nav-label">메뉴</div>
-        {NAV_ITEMS.map((item) => (
-          <NavLink
-            key={item.to}
-            to={item.to}
-            className={({ isActive }) => `sidebar-link${isActive ? " active" : ""}`}
-            onClick={closeSidebar}
-          >
-            <item.icon />
-            {item.label}
-          </NavLink>
+        {NAV_GROUPS.map((group) => (
+          <div key={group.label}>
+            <div className="sidebar-nav-label">{group.label}</div>
+            {group.items.map((item) => (
+              <NavLink
+                key={item.to}
+                to={item.to}
+                className={({ isActive }) => `sidebar-link${isActive ? " active" : ""}`}
+                onClick={closeSidebar}
+              >
+                <item.icon />
+                {item.label}
+              </NavLink>
+            ))}
+          </div>
         ))}
 
         <div className="sidebar-footer">

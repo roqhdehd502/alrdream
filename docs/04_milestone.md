@@ -1328,11 +1328,343 @@ scroll={false}`로 교체(태블릿/데스크톱 반응형 폭 제한도 자동�
 
 # Phase 18: 후속 업데이트 - 3
 
-> 현재 도메인에서 기획에서 누락된 부분을 확인하고 추가한다.
+> 현재 도메인에서 기획에서 누락된 부분을 확인하고 반영한다.
+> 현재 도메인에서 추가적인 필요한 기능이 있는지 확인 후 반영한다.
+
+- [x] [01]/[02]/[03] 명세 대비 실제 구현 갭 확인 및 수정
+- [x] BM([01] 13번) Pro 게이팅 반영 — 설계 문서 PDF export를 Pro 전용으로 제한
+- [x] 도메인에 추가로 필요한 기능 후보 조사 및 구현 — Pro 구독 가입/해지/결제내역/사용량 조회 프론트엔드
+- [x] Admin의 BM/구독/결제 관리 기능 재점검 및 보완 — 개별 결제 내역 조회 화면 추가
+- [x] 정기 구독 상품 소개 UI(Frontend) + 가격/프로모션 관리(Admin) 추가 — 하드코딩 가격을 DB 기반으로 구조 변경
+
+## 작업 내용 — 명세 갭 수정
+
+[01]/[02]/[03] 세 문서와 실제 백엔드/프론트 구현을 항목별로 대조한 결과, 아래 4가지 불일치를 확인하고 모두
+수정했다. 모두 기존 설계 의도(코드 주석에 이미 남아있던 의도 포함)를 그대로 따라가는 수정이라 별도 구조
+변경 없이 진행했다.
+
+- **버전 다중 삭제 UI 부재** ([01] 6/9/11번) — 백엔드는 이미 다건 삭제(`DeletePlanningVersionsRequest.versionIds`
+  등)를 지원했지만, 프론트 `VersionList`에 체크박스가 없어 실제로는 한 번에 1개씩만 삭제 가능했다.
+  `VersionList`에 `selectable`/`selectedIds`/`onToggleSelect` prop과 체크박스 UI(`icons.tsx`에 `CheckIcon`
+  추가)를 얹고, `PlanningTab`/`AnalysisTab`/`DesignTab`의 목록 화면에 "선택 삭제" 토글 + 선택 개수 표시 +
+  확인 카드(`Card tone="danger"`)를 추가해 기존 백엔드 다건 삭제 엔드포인트를 그대로 호출하도록 배선했다.
+- **분석 "수정" 버튼 부재** ([01] 8번) — `AnalysisVersionService`에는 "'수정'이 입력 차이 없이 생성 엔드포인트를
+  그대로 다시 호출하는 방식"이라는 주석이 이미 있었지만, `AnalysisTab`의 버전 상세 화면에는 정작 그 버튼이
+  없었다(목록 화면의 "새로 분석하기"만 존재). 상세 화면에 "수정" 버튼을 추가해 동일한 재생성 엔드포인트를
+  호출하도록 배선했다(기획/설계 탭과 동일한 위치·순서).
+- **소프트 삭제된 상위 버전의 하위 조회 차단** ([03] §5) — "상위(기획)가 삭제돼도 하위(분석/설계)는 조회만
+  가능하고 재생성만 막는다"는 명세와 달리, 실제로는 상위가 소프트 삭제되면 하위 상세 조회/PDF까지 함께
+  막혔다. `PlanningVersionService`/`AnalysisVersionService`에 조회 전용 `getForRead`(조상의 `deletedAt`을
+  보지 않는 조회 경로)를 추가하고, 목록/상세/PDF 경로만 여기로 옮겼다. 생성·재생성(`create`) 경로는 기존
+  `getOwned`(엄격 검사)를 그대로 써서 재생성 차단은 유지된다.
+- **설계 탭이 워크스페이스의 "최신 완료 분석"만 추적** — `AnalysisTab`에서 특정(반드시 최신은 아닌) 분석
+  버전을 골라 "설계 시작"을 눌러도, `DesignTab`은 항상 워크스페이스 전체의 최신 완료 분석을 기준으로
+  설계 버전 목록을 조회해 방금 만든 설계가 안 보일 수 있는 구조였다. "설계 시작"/설계 "수정" 완료 후
+  redirect URL에 `analysisVersionId` 쿼리 파라미터를 실어 보내고, `DesignTab`이 이를 `preferredAnalysisVersionId`로
+  받아 해당 분석 버전을 직접 조회하도록 수정했다(파라미터가 없을 때는 기존 "최신 완료 분석" 기본 동작 유지).
+
+## 작업 내용 — BM Pro 게이팅
+
+[01] 13번은 Pro 구독 혜택으로 "설계 문서 export"를 명시하지만, 실제 코드엔 게이팅이 전혀 없어 Free
+유저도 설계 PDF를 무제한으로 받을 수 있었다. `DesignVersionService.generatePdf`에 `MemberRepository`를
+주입해 `member.getPlan() != PRO`면 새로 추가한 `ForbiddenException`(403, code=`PRO_ONLY_FEATURE`)을
+던지도록 했다(`GlobalExceptionHandler`에 핸들러 추가). 프론트 `PdfButton`은 기존 `ApiError` 메시지 표시
+로직을 그대로 재사용해 별도 변경 없이 "설계 문서 PDF 다운로드는 Pro 구독 전용 기능입니다." 메시지가 뜬다.
+
+## 검증
+
+`./gradlew compileJava`, `npx tsc --noEmit`, `npx expo lint` 모두 클린. 로컬에서 백엔드/프론트 기동 후
+Playwright로 실제 계정을 만들어 기획→분석→설계 전체 체인을 API+UI 혼합으로 직접 실행해 확인:
+버전 다중 삭제(체크박스 선택→일괄 삭제 성공), 분석 상세의 "수정" 버튼 노출, 분석 결과에 합법성/자원
+확보 가능성/경쟁 환경/핵심 기능 후보 섹션이 실제로 채워짐, DESIGN 설문 Q1 옵션이 해당 분석의 핵심 기능
+후보로 동적 주입됨, 설계 탭이 방금 생성한 설계 버전을 정상적으로 보여줌, 설계 PDF 다운로드 시도 시 Free
+플랜 계정에 403(`PRO_ONLY_FEATURE`) 메시지가 뜨는 것까지 확인. 검증에 쓴 계정/워크스페이스는 앱 자체의
+회원 탈퇴(`DELETE /api/auth/me`)/워크스페이스 삭제 API로 정리했다.
+
+## 신규 기능 — Pro 구독 가입/해지/결제내역/사용량 조회 (프론트엔드)
+
+당초 "현재 도메인에 추가로 필요한 기능이 있는지 확인" 지시에 따라 조사해 아래 2가지 갭을 제안만 하고
+넘어갔으나("Pro 구독 가입/결제 프론트엔드 UI 전무", "Free 티어 잔여 생성 횟수 확인 불가"), 사용자가 확인
+후 곧바로 구현을 요청해 이어서 진행했다. 백엔드도 "조회"만 가능했지 사용자 본인이 해지하거나 결제 내역을
+볼 방법이 없어, 이번에 백엔드까지 함께 보완했다.
+
+**백엔드 추가**
+
+- `subscriptions.next_payment_schedule_id`(V7 마이그레이션) — PortOne에 등록된 마지막 결제 예약 ID를
+  저장해둔다. 사용자가 해지할 때 이 값으로 `PaymentScheduleClient.revokePaymentSchedules(billingKey,
+scheduleIds)`를 호출해 PortOne 쪽 예약 자체를 취소해야 한다는 걸 SDK 소스(`server-sdk-0.24.0.jar`
+  디컴파일 확인)로 검증하고 구현했다 — 이 호출 없이 DB 상태만 CANCELED로 바꾸면 PortOne은 예정대로
+  다음 달 결제를 진행해버리는 실제 과금 버그가 났을 것이다. 최초 구독 시점(`SubscriptionController.subscribe`)과
+  웹훅의 반복 재예약 시점(`PortOneWebhookService#rescheduleNextPayment`) 둘 다에서 이 값을 갱신한다.
+- `DELETE /api/subscriptions/me` — 사용자 본인 해지. 즉시 발효, 남은 기간 일할 환불 없음(정책 단순화,
+  이 이상의 환불/유예 로직은 스코프 밖).
+- `GET /api/subscriptions/me/payments` — 결제 내역 조회(해지 후 재구독으로 여러 구독 이력이 있어도 통합).
+- `GET /api/usage-quota/me`(신규 `UsageQuotaController`) — 이번 달 AI 생성 사용량/한도 조회 전용
+  읽기 메서드(`UsageQuotaService#getCurrent`, 기존 `checkAndIncrement`와 달리 row를 만들거나 값을
+  바꾸지 않는다).
+
+**프론트엔드 추가**
+
+- `@portone/browser-sdk` 설치. 빌링키 발급(`requestIssueBillingKey`)은 브라우저 전용 SDK라 동적
+  import로 감싸 웹에서만 동작하게 하고(`frontend/src/api/portone.ts`), `EXPO_PUBLIC_PORTONE_STORE_ID`/
+  `EXPO_PUBLIC_PORTONE_CHANNEL_KEY` 환경변수를 추가했다(공개 식별자라 `EXPO_PUBLIC_`로 노출해도 안전 —
+  API 시크릿/웹훅 시크릿과는 다름). §4-5 Google 로그인과 동일하게 네이티브에서는 "웹에서 신청하라"는
+  안내만 보여준다(네이티브 지원은 공식 `@portone/react-native-sdk` 도입이 필요한 별도 작업으로 후순위).
+- `app/(app)/subscription.tsx` 신규 화면 — 현재 플랜/상태 배지, (Free) Pro 구독 버튼, (Pro) 다음 결제일과
+  해지 버튼(확인 카드 포함), 이번 달 AI 생성 사용량(진행률 바), 결제 내역 목록을 한 화면에서 보여준다.
+  `account.tsx`에 플랜 표시 + "구독 보기" 진입 버튼을 추가해 연결했다.
+
+**한계 — 실결제 미검증**: PortOne 실제 테스트 스토어 자격증명이 없어 빌링키 발급→결제→웹훅 확정까지의
+전체 결제 플로우는 라이브로 검증하지 못했다. `npx tsc --noEmit`/`npx expo lint`/`./gradlew compileJava`
+클린, PortOne 브라우저 SDK의 실제 타입 정의(`unpkg`로 `.d.ts` 확인)와 서버 SDK의 실제 클래스 시그니처
+(jar 디컴파일)를 근거로 구현했고, 로컬에서 실제 계정으로 화면 렌더링·API 응답(Free 플랜 표시, 사용량
+0/5회, 빈 결제 내역, 크리덴셜 미설정 시 "결제 설정이 아직 완료되지 않았습니다" 에러 배너, 해지
+엔드포인트의 400 처리)까지는 확인했다. `EXPO_PUBLIC_PORTONE_STORE_ID`/`CHANNEL_KEY`와 `backend/.env`의
+`PORTONE_API_SECRET`/`PORTONE_WEBHOOK_SECRET`/`PORTONE_STORE_ID`/`PORTONE_CHANNEL_KEY`에 실제 PortOne
+콘솔 값을 채운 뒤, 최소 한 번은 실제(또는 PortOne 테스트 모드) 카드로 구독→해지까지 직접 확인이 필요하다.
+
+**추가 검증(실제 PortOne 자격증명 반영 후)**: 사용자가 `frontend/.env`에 `EXPO_PUBLIC_PORTONE_STORE_ID`/
+`EXPO_PUBLIC_PORTONE_CHANNEL_KEY`를 채워 넣었고, `backend/.env`에도 이미 대응하는 `PORTONE_STORE_ID`/
+`PORTONE_CHANNEL_KEY`/`PORTONE_API_SECRET`/`PORTONE_WEBHOOK_SECRET`가 설정돼 있었다. 실제 계정으로
+"Pro 구독하기"를 눌러 PortOne SDK 모달을 열어보니 카드 등록 단계에서 "아임포트테스트 — 실제 결제가
+안되는 테스트입니다" 문구가 떠 이 채널이 테스트 연동임을 확인했고, 테스트 카드번호(4242-4242-4242-4242)로
+카드 등록 단계까지는 정상 진행됨을 확인했다. 다음 단계(본인인증 — 주민등록번호 앞 7자리 + 휴대폰 SMS
+인증)는 실제 개인정보/실물 휴대폰이 필요해 자동화 환경에서 더 진행할 수 없어 결제 취소로 흐름을 종료했다.
+이때 프론트엔드가 PortOne 응답(`PAY_PROCESS_CANCELED`)을 에러 배너에 정상적으로 표시하고 로딩 상태를
+깨끗이 되돌리는 것까지 확인했다 — 즉 빌링키 발급 SDK 연동 자체(스토어/채널 자격증명, 요청 파라미터,
+에러 처리)는 실제로 동작함을 검증했고, 남은 미검증 구간은 본인인증 이후의 웹훅 확정 단계뿐이다. 이
+구간은 실제 휴대폰으로 본인인증을 완료할 수 있는 사람이 최소 한 번 직접 확인해야 한다.
+
+## 작업 내용 — Admin BM/구독/결제 관리 재점검
+
+Admin 대시보드(`DashboardPage.tsx`)는 이미 Phase 16부터 Pro 구독 현황 목록/요약, FREE 티어 월별 생성
+한도 조정([01] 13번 BM)을 지원하고 있어 "구독 관리"·"BM 관리" 자체는 누락이 아니었다. 다만 대시보드에는
+"이번 달 결제 성공/실패 건수" 집계만 있을 뿐, 개별 결제 시도(누가 언제 얼마를 결제/실패했는지) 내역을
+조회할 방법이 전혀 없었다 — 이 부분이 실제 갭이었다.
+
+- **백엔드**: `PaymentHistoryRepository`에 상태 필터/구독ID 목록 기반 페이지 조회 메서드 추가. 신규
+  `PaymentAdminService`가 결제 이력→구독→회원 2단계 조인을 배치 조회(N+1 방지)로 처리해 이메일까지
+  함께 반환한다. `GET /api/admin/payments`(전체 결제 내역, 상태 필터) — `SubscriptionAdminController`와
+  동일한 패턴 — 와 `GET /api/admin/users/{userId}/payments`(사용자 상세의 CS용 드릴다운, `WorkspaceAdminController`와
+  동일한 패턴) 두 엔드포인트를 추가했다.
+- **프론트엔드(Admin)**: 신규 `PaymentsPage.tsx`("결제 관리" — 사이드바에 `PaymentIcon` 신규 아이콘과
+  함께 추가)와 `UserDetailPage.tsx`의 "결제 내역" 섹션(사용자별 페이지네이션 테이블)을 추가했다.
+
+**검증**: `./gradlew compileJava`, `npx tsc --noEmit`, `npm run build`, `oxlint` 모두 클린. 회원가입 후
+DB에서 `role='ADMIN'`으로 승격한 테스트 계정으로 Playwright 실동작 검증 — `/api/admin/payments`(전체·
+상태 필터 둘 다), `/api/admin/users/{userId}/payments`(빈 목록), 존재하지 않는 사용자 조회 시 400을
+API 레벨에서 직접 확인했고, Admin 콘솔에서 "결제 관리" 사이드바 진입 → 빈 상태 렌더링 → 상태 필터
+전환 → 사용자 상세의 "결제 내역" 섹션까지 콘솔 에러 없이 렌더링됨을 확인했다. 실제 결제 레코드가 아직
+없어(라이브 결제 미완료) 데이터가 채워진 테이블 렌더링은 확인하지 못했으나, 실제 Supabase DB에 검증용
+가짜 결제 레코드를 직접 INSERT하는 시도는 이번 세션의 권한 정책상 차단되어 시도하지 않았다 — 실제 결제가
+한 번이라도 완료되면(위 "추가 검증" 항목 참고) 이 화면에서 정상적으로 채워진 목록을 볼 수 있을 것이다.
+테스트 계정은 모두 자체 API(`DELETE /api/auth/me`)로 정리했다.
+
+## 작업 내용 — 정기 구독 상품 소개(Frontend) + 가격/프로모션 관리(Admin)
+
+사용자 요청: "결제 상품 소개 페이지 UI(프론트엔드)"와 "프로모션 행사를 대비한 가격 변경/기간제 할인 관리 기능
+(Admin)"을 만들어달라는 요청이었고, 본인도 "구조 변경이 필요할거 같으니 감안해서 진행해달라"고 미리
+언급했다. 실제로 Pro 월 요금은 그동안 `application.yml`의 `app.portone.pro-monthly-price-krw` 고정값
+(9900원)이라 값을 바꾸려면 재배포가 필요했고, 프로모션 개념 자체가 없었다 — 이번에 DB 기반으로 구조를
+바꿨다.
+
+**설계 결정(사용자 확인 없이 합리적 기본값으로 진행, 근거를 여기 남김)**:
+
+- **가입 시점 가격을 구독별로 잠그지 않는다.** 기존 아키텍처가 이미 매 갱신(반복 체이닝 재예약)마다
+  청구 금액을 새로 계산해 포트원에 예약하는 구조라, "현재 유효가"를 매번 다시 조회하는 쪽이 가장 단순하고
+  기존 구조와 자연스럽게 맞았다. 가격을 내리면 기존 구독자도 다음 갱신부터 혜택을 받고, 올리면 다음
+  갱신부터 새 가격이 적용된다(그레이트파더링 없음) — 별도 요구사항이 없는 한 일반적인 SaaS 가격 변경
+  방식과도 일치한다.
+- **혜택 소개는 실제로 구현된 것만.** [01] 13번 BM은 "무제한 생성/고급 분석/설계 문서 export"를 Pro
+  혜택으로 언급하지만, "고급 분석"은 실제로 별도 구현된 기능이 아니라(분석 결과물이 FREE/PRO로 갈리지
+  않음) 상품 소개 화면에서 제외했다 — 실제로 없는 혜택을 광고하지 않기 위함.
+
+**백엔드**
+
+- `subscription_pricing`(V8 마이그레이션, `free_tier_settings`와 동일한 단일 행 패턴) — `base_price_krw`,
+  `promo_price_krw`/`promo_starts_at`/`promo_ends_at`(세 컬럼은 전부 NULL 또는 전부 채워짐만 허용하는
+  CHECK 제약). 기존 `app.portone.pro-monthly-price-krw`(9900)를 초기 행으로 이관하고 그 설정 자체는
+  application.yml에서 제거했다.
+- `SubscriptionPricing` 엔티티의 `effectivePriceKrw(now)` — 프로모션 기간(`starts <= now < ends`)이면
+  프로모션가, 아니면 기본가.
+- `SubscriptionPricingService.getEffectivePriceKrw()`를 `SubscriptionService#chargeFirstPayment`/
+  `#scheduleNextPayment`, `PortOneWebhookService#rescheduleNextPayment`(웹훅의 반복 재예약 지점) 세
+  군데에 주입해, 하드코딩 `proMonthlyPriceKrw` 대신 매 청구 시점마다 유효가를 다시 조회하도록 바꿨다.
+- Admin: `SubscriptionPricingAdminController` — `GET/PUT /api/admin/subscriptions/pricing(/base-price)`,
+  `PUT/DELETE /api/admin/subscriptions/pricing/promotion`. 프로모션 종료가 시작보다 빠르면 400.
+- 회원: `SubscriptionController`에 `GET /api/subscriptions/pricing` 추가 — 상품 소개 화면 전용, 관리자
+  응답과 달리 프로모션 시작 시각 등 내부 상세는 빼고 필요한 값만 반환.
+
+**프론트엔드(Admin)** — `DashboardPage.tsx`의 "구독/사용량 대시보드"에 "Pro 구독 가격 관리" 카드를
+FREE 티어 한도 카드 옆에 추가(같은 "BM 설정" 성격이라 한 화면에 묶었다). 기본가 변경 폼과, 프로모션이
+없을 때는 가격/시작/종료(`datetime-local`) 입력 폼, 있을 때는 진행 상태 + "조기 종료" 버튼을 조건부로
+보여준다.
+
+**프론트엔드(회원)** — `/subscription` 화면의 Free 플랜 카드를 혜택 목록(체크 아이콘 + 무제한 생성/설계
+PDF 다운로드) + 가격(프로모션 중이면 기본가 취소선 + 프로모션가 강조 + 종료일, 아니면 기본가만) + "Pro
+구독하기" 버튼으로 구성된 실질적인 "상품 소개" 섹션으로 바꿨다. 별도 라우트를 새로 만들지 않고 기존
+`/subscription` 화면(계정 → "구독 보기"로 이미 도달하는 경로)을 확장하는 쪽을 택했다 — 이미 그 화면이
+Free 사용자에게 업그레이드를 유도하는 지점이었고, 라우트를 더 늘리는 것보다 그 자리를 제대로 된 소개
+화면으로 채우는 쪽이 더 단순했다.
+
+**검증**: `./gradlew compileJava`, `npx tsc --noEmit`(admin/frontend 둘 다), `npm run build`(admin),
+`oxlint`/`npx expo lint` 모두 클린. 로컬에서 3개 서버(backend/admin/frontend) 모두 기동 후 Flyway가
+V8을 정상 적용함을 로그로 확인. 임시 Admin 계정으로 API 레벨에서 기본가 변경/프로모션 설정(정상 케이스)/
+프로모션 종료가 시작보다 빠른 잘못된 요청(400 확인)/프로모션 조기 종료를 모두 검증했고, Admin 콘솔에서
+"Pro 구독 가격 관리" 카드가 프로모션 진행 중 상태를 정확히 렌더링(현재 청구가 4,900원 + "기본가 9,900원"
+안내)하고 "프로모션 조기 종료" 버튼이 실제로 동작하는 것도 Playwright로 확인했다. 프론트엔드는 임시 회원
+계정으로 `/subscription` 화면에서 혜택 목록 + 취소선 기본가/프로모션가/종료일이 스크린샷상 정상 렌더링됨을
+확인했다. 검증에 쓴 프로모션/가격 변경은 모두 원래 값(9900원, 프로모션 없음)으로 되돌려놓았고, 테스트
+계정도 모두 자체 API로 정리했다.
 
 ---
 
-# Phase 19: 기능 및 비기능 전체 점검 - 2
+# Phase 19: 후속 업데이트 - 4 (앱다운 UI 개편 + 쿠폰/제재 시스템)
+
+> 서비스를 직접 써본 뒤 나온 피드백. frontend/admin이 여전히 웹처럼 보이고(앱다운 느낌 부족),
+> 홍보용 쿠폰 코드로 Pro 무료 체험을 시키는 기능과 악성 사용자 제재(BAN)/다수 사용자 Pro 일괄 지급 같은
+> CS 도구가 빠져있었다. 사용자가 "백엔드 구조 변경이 필요할 것 같으니 감안해서 진행해달라"고 먼저
+> 언급했고, 실제로 구조 변경이 필요했다(19-A 참고). 범위가 커서 4단계로 나눠 순차 진행한다.
+
+- [x] 19-A: 백엔드 구조 변경 — `pro_expires_at`(쿠폰/지급 Pro), 계정 제재, 쿠폰 도메인, Admin 회원 관리 액션
+- [x] 19-B: Admin — UI 개편 + 페이지 재구성(구독 관리/AI 프롬프트 횟수/쿠폰 신설, 대시보드 차트화, 사용자 관리 액션)
+- [x] 19-C: Frontend — Apple HIG 하단 탭바 내비게이션 셸(홈 허브/워크스페이스 분리)
+- [x] 19-D: Frontend — 화면 재배치(구독/마이페이지/쿠폰)
+
+## 작업 내용 — 19-A 백엔드 구조 변경
+
+**Pro 부여와 구독의 분리(`pro_expires_at`)**: 기존엔 `MemberPlan`이 FREE/PRO 단일 enum이라 만료 개념이
+없었고, 결제 성공/실패 웹훅과 사용자 해지 3곳이 무조건 `member.changePlan(...)`을 직접 호출했다. 쿠폰/
+관리자 지급으로 "구독과 무관하게 이 시각까지는 Pro"를 보장하려면 이 흐름이 함부로 되돌리지 못하게 막아야
+했다. `users.pro_expires_at`(V9, nullable)을 추가하고 `Member`에 3개 메서드를 얹었다: `extendProUntil(days)`
+(쿠폰/관리자 지급 공용 — FREE는 오늘부터 N일, 이미 Pro면 `max(기존 proExpiresAt, now)`부터 N일 연장),
+`syncPlanFromSubscriptionEnd()`(기존 `changePlan(FREE)` 2곳을 대체 — proExpiresAt이 아직 유효하면 FREE로
+안 내림), `clearProGrant()`(Admin 강제 Free 전환용 — 무조건 초기화). `PortOneWebhookService.handlePaid`의
+`changePlan(PRO)`는 그대로 뒀다(올리는 건 항상 안전).
+
+**첫 `@Scheduled` 잡**: `ProGrantExpirationScheduler`(시간당 1회) — `plan=PRO AND proExpiresAt < now AND
+활성 구독 없음`인 사용자만 FREE로 되돌린다(순수 쿠폰/지급만으로 Pro인 사용자). `BackendApplication`에
+`@EnableScheduling`을 처음 켰다.
+
+**즉시 제재(BAN)**: `permanent_ban`/`temp_ban_until`(V9) 두 필드로 관리. 기존 `JwtAuthenticationFilter`는
+JWT 클레임만 신뢰하고 DB를 전혀 조회하지 않아, 이미 발급된 액세스 토큰(최대 30분)은 계정을 제재해도
+계속 통하는 구조였다 — "지금 악용 중인 사용자를 막는다"는 제재의 목적 자체가 흐려지므로, 필터에 회원
+조회 1건을 추가해 매 요청마다 확인하고 즉시 403(`ACCOUNT_BANNED`)으로 거부하게 했다(이 앱 규모에서
+PK 조회 1건 추가는 성능 영향 무시 가능 수준으로 판단, 과설계 방지 차원에서 Redis 캐시는 지금 단계에서
+하지 않음). `AuthService.login`/`oauthLogin`/`refresh`도 동일하게 막아 재로그인으로 새 토큰을 받는 것도
+차단한다.
+
+**쿠폰 도메인**: 신규 `domain/coupon/` — `Coupon`(코드는 관리자가 직접 지정, 지급 일수/최대 사용
+횟수/코드 자체 기한/활성 여부), `CouponRedemption`(`UNIQUE(coupon_id, user_id)`로 동일 유저 중복 사용을
+DB 레벨에서 차단). `POST /api/coupons/redeem`(회원), `/api/admin/coupons`(코드 생성/목록/비활성화),
+`/api/admin/coupons/redemptions`(사용 현황, 코드/이메일 조인은 `PaymentAdminService`와 동일한 배치 조회
+패턴).
+
+**Admin 회원 관리 액션**: 그동안 읽기 전용이던 `MemberAdminController`에 쓰기 액션 추가 —
+`POST /api/admin/users/pro-grant`(`{userIds[], days}`, `PlanningVersionService#deleteAll`류의 "전체
+조회 → 개수 검증 → 없는 id 포함 시 통째로 400" 패턴 재사용), `POST .../{userId}/downgrade`(활성 구독이
+있으면 `SubscriptionService#cancelActiveSubscription` 재사용해 PortOne 예약도 함께 취소한 뒤 무조건
+Free 확정), `POST .../{userId}/ban`/`.../unban`.
+
+**검증**: `./gradlew compileJava` 클린. 로컬 기동 후 Flyway V9 정상 적용 확인. 임시 admin/member 계정으로
+전 구간 API 레벨 실동작 검증 — 쿠폰 생성→member redeem(Free→Pro 14일, `proExpiresAt` 정확)→중복 사용
+400, admin 쿠폰 목록/사용 현황 조회, 임시 제재→**같은 아직 유효한 access token으로 즉시 403 확인**→
+해제→같은 토큰으로 즉시 복구 확인, 영구 제재→403(다른 메시지)→해제, 잘못된 제재 요청(과거 시각) 400,
+일괄 Pro 지급(기존 `proExpiresAt`에 정확히 스택되어 연장됨 확인), 존재하지 않는 id 포함 시 일괄 지급
+전체 400, 활성 구독 없는 사용자 강제 Free 전환(플랜/proExpiresAt 초기화 확인)까지 전부 확인. 테스트
+계정/쿠폰은 모두 정리(쿠폰은 비활성화, 계정은 자체 탈퇴 API).
+
+**추가 발견 및 수정(19-B 검증 중)**: Admin UI로 "영구 정지" 버튼을 테스트 관리자 계정 자신에게 눌러본
+직후, 그 계정으로 보낸 다음 요청(같은 화면의 "정지 해제")이 즉시 403(`ACCOUNT_BANNED`)으로 거부되는
+것을 실제로 확인했다 — 제재가 이미 발급된 토큰까지 즉시 차단하도록 설계한 대로 정확히 동작한 것이지만,
+동시에 "관리자가 실수로 관리자 계정을 제재하면 앱 안에서 되돌릴 방법이 없다"는 실제 운영 위험을 그
+자리에서 드러냈다(DB 직접 접근 없이는 복구 불가 — 실제로 이 세션에서도 psql로 직접 풀어줘야 했다).
+`MemberAdminService#ban`에 대상이 `ROLE_ADMIN`이면 400으로 거부하는 가드를 추가해 이 시나리오 자체를
+막았고, 다시 검증해 정상적으로 400이 뜨는 것을 확인했다.
+
+## 작업 내용 — 19-B Admin UI 개편 + 페이지 재구성
+
+**전체 톤앤매너**: Phase 17 admin 폴리싱과 동일한 저위험 전략 — 완전 재작성 대신 기존 `index.css`
+토큰(색상/그림자/radius)은 그대로 두고, 늘어난 메뉴 항목을 다섯 그룹(현황/구독/쿠폰/콘텐츠/사용자)으로
+묶어 `Layout.tsx`의 사이드바에 그룹 헤더를 추가했다(Apple HIG의 명확한 그룹핑 원칙).
+
+**대시보드 차트화**: 차트를 그리기 전 `dataviz` 스킬을 먼저 로드해 절차를 따랐다. `recharts` 추가
+(`npm audit fix`로 전이 의존성 취약점 0건 확인). 색상은 새로 고르지 않고 이미 이 admin 앱 전역의 뱃지
+색상과 동일한 의미로 쓰이던 기존 브랜드 토큰(success/warning/danger, primary)을 그대로 재사용했다 —
+`validate_palette.js`로 검증했더니 해당 초록/주황 조합이 CVD 분리 기준(색맹 시뮬레이션 ΔE)을 단독으로는
+못 넘겼지만, 모든 차트가 막대마다 x축 카테고리명 + 값 직접 라벨을 필수로 붙이는 구조라 "색상 단독으로
+구분하지 않는다"는 보조 인코딩 요건은 이미 충족돼 있어 기존 브랜드 색을 그대로 썼다(스킬의 룰: CVD가
+6~8 미만 구간이면 보조 인코딩이 있을 때만 허용). 새 시계열 집계 API는 만들지 않고 기존 스냅샷 수치만
+막대로 시각화했다(요청 범위 판단 — 04_milestone.md 스코프 밖 항목 참고).
+
+**페이지 재구성**: `DashboardPage.tsx`는 전체 가입자/이번 달 생성(스탯 타일) + 가입자 플랜 분포/이번 달
+결제 성공·실패(차트) 4개만 남기고, 나머지는 전용 페이지로 옮겼다 — 신규 `SubscriptionManagementPage.tsx`
+("구독 관리")에 구독 상태 분포 차트(신규) + 기존 "Pro 구독 가격 관리" 카드 + 구독자 목록 테이블을 모두
+모았고(가격 관리만 옮기고 구독자 목록을 대시보드에 남기면 어중간하게 쪼개져서 "구독"이라는 주제로
+응집), 신규 `PromptQuotaPage.tsx`("AI 프롬프트 횟수")에 FREE 티어 한도 카드를 옮겼다. 신규
+`CouponsPage.tsx`(코드 생성 폼 + 목록/비활성화)와 `CouponRedemptionsPage.tsx`(사용 현황)를 "쿠폰"
+메뉴 그룹으로 묶었다.
+
+**사용자 관리 액션**: `UsersPage.tsx`에 체크박스 다중 선택 + 선택 시 나타나는 액션바("Pro 지급/연장"
+일수 입력 — 유일하게 요청에서 명시적으로 "일괄"이라 표현된 기능)를 추가했다. Free 전환/정지는 원 요청에
+"일괄"이라는 표현이 없어 개별 사용자 단위로만 지원 — `UserDetailPage.tsx`에 "회원 관리" 카드(Pro
+지급/연장, Free로 전환, 일시/영구 정지, 정지 해제)와 현재 상태(요금제/Pro 보장 만료/제재 상태) 표시를
+추가했다.
+
+**검증**: `npx tsc --noEmit`/`npm run build`/`oxlint` 모두 클린. 임시 admin 계정으로 Playwright 실동작
+검증 — 대시보드 차트(라이트/다크 모두 스크린샷, 값 라벨/축 라벨 정상 렌더링), 구독 관리 페이지(가격
+카드+구독자 목록 정상 이동), AI 프롬프트 횟수 페이지, 쿠폰 생성→목록 반영→비활성화, 유저 쿠폰 사용
+현황(과거 테스트 데이터 정상 표시, 탈퇴한 유저도 이력은 남음 확인), 사용자 목록 체크박스 선택→일괄
+Pro 지급(3일 지급 후 플랜 PRO로 변경 확인)→상세 페이지에서 Free로 전환(정상 반영)까지 확인. 위
+"추가 발견 및 수정"에 정리한 self-ban 사고와 그 수정까지 포함해 전부 확인. 테스트 계정은 자체 탈퇴
+API로 정리했다.
+
+## 작업 내용 — 19-C/19-D Frontend 내비게이션 셸 + 화면 재배치
+
+**하단 탭바 도입**: `expo-router`의 `Tabs`가 이 코드베이스에서 전혀 쓰인 적이 없어(순수 `Stack`만),
+새 `(app)/(tabs)/_layout.tsx`(Tabs, 4탭: 홈/워크스페이스/구독/마이페이지)를 기존 `(app)/_layout.tsx`
+(Stack, 그대로 유지) 안에 한 단계 중첩했다. 실제 코드 작성 전에 `frontend/AGENTS.md`의 "Expo 버전이
+바뀌었으니 버전드 문서를 꼭 확인하라"는 경고에 따라 서브에이전트로 v57 공식 문서를 직접 조회해 이 구조
+(탭 그룹의 정확매치 라우트와, 같은 이름을 공유하는 형제 폴더의 하위 라우트가 충돌 없이 공존하는지 —
+예: `(tabs)/workspaces.tsx`가 `/workspaces`, 형제 `workspaces/[id].tsx`가 `/workspaces/:id`)가 v57에서도
+그대로 지원됨을 먼저 확인한 뒤 진행했다. 탭 밖의 화면(`workspaces/new`, `workspaces/[id]`, `generating`,
+신규 `subscription/payments`, `coupon`)은 전부 바깥 Stack의 형제 라우트로 남겨 탭 안에서 눌렀을 때
+탭바 없이 전체 화면으로 푸시되는 iOS 드릴인 동작을 그대로 얻었다(실제로 Playwright로 워크스페이스 생성
+화면을 열어 탭바가 사라지고 뒤로가기 화살표 헤더로 바뀌는 것까지 확인).
+
+**신규 홈 허브**: `(tabs)/index.tsx` — 인사말 + 워크스페이스/구독 카드 2개(각각 탭으로 이동), 이후 기능이
+늘어도 카드를 더 얹기 쉬운 구조. 기존 `(app)/index.tsx`(워크스페이스 목록)는 그대로 `(tabs)/workspaces.tsx`
+로 옮겼다.
+
+**구독/마이페이지 재배치**: `subscription.tsx`에서 "이번 달 AI 생성 사용량" 섹션을 `account.tsx`
+(마이페이지)로 옮기고, "결제 내역"은 인라인 목록 대신 "결제 내역 보기" 버튼 + 별도 화면
+(`(app)/subscription/payments.tsx`)으로 분리했다. `account.tsx`에 "쿠폰 등록" 진입 행을 추가하고
+신규 `(app)/coupon.tsx`(코드 입력 → 등록, 성공 시 지급 일수/보장 만료일 표시)를 만들었다.
+
+**검증 중 발견한 실제 버그와 수정**: 쿠폰으로 Pro가 된 계정을 실제로 만들어 확인하는 과정에서, 구독
+탭과 홈 허브의 "Pro 여부" 판정이 `subscription.status`(결제 구독 상태)만 보고 있어서 **쿠폰/관리자
+지급만으로 Pro인 사용자가 구독 탭에 들어가면 여전히 "Free 플랜"에 "Pro 구독하기" 버튼이 뜨는** 실제
+버그를 발견했다 — 쿠폰이 생기기 전에는 Pro가 항상 결제 구독에서만 나와 두 신호가 같았지만, 이제는
+아니다. `member.plan`(쿠폰/지급을 포함해 항상 옳은 신호)로 교체하고, 결제 구독이 없는 Pro 사용자에게는
+"쿠폰/프로모션으로 {날짜}까지 Pro를 이용할 수 있어요" 안내를 추가로 보여주도록 고쳤다. 이를 위해
+회원용 `GET /api/auth/me`(`MemberResponse`)에 `proExpiresAt`을 새로 노출했다.
+
+이 과정에서 `member.plan`이 로그인 시점에만 채워지고 이후 쿠폰 등록/구독 시작/해지 같은 액션 후에는
+갱신되지 않는다는 것도 함께 발견했다(계정 페이지가 세션 내내 "Free"로 남아있는 문제) — `AuthContext`에
+`refreshMember()`를 추가하고 쿠폰 등록/구독 시작/해지 직후 호출하도록 배선해, 리로드 없이 마이페이지·
+구독 탭·홈 허브 전체가 즉시 갱신되는 것까지 Playwright로 확인했다.
+
+**검증**: `npx tsc --noEmit`/`npx expo lint` 클린(단, 새 라우트 추가 직후엔 expo-router의 typed routes
+선언(`.expo/types/router.d.ts`)이 갱신되지 않아 타입 에러가 났다 — `expo start`를 한 번 띄워 재생성한
+뒤 재확인). 로컬 3서버(backend/admin/frontend) 기동 후 실제 계정으로 Playwright 전체 플로우 검증 — 홈
+허브(워크스페이스 개수/구독 상태 카드), 탭 전환 4개, 워크스페이스 생성 화면 진입 시 탭바 사라짐, 구독
+탭(혜택/가격, "결제 내역 보기"→별도 화면), 마이페이지(사용량/쿠폰 진입), 쿠폰 등록(성공/중복 사용 거부/
+2번째 쿠폰으로 만료일 스택 연장 확인), 위에서 고친 "쿠폰-Pro가 구독 탭에서 정확히 표시되는지"와
+"리로드 없이 즉시 갱신되는지"까지 전부 확인. 테스트 계정/쿠폰은 정리했다.
+
+---
+
+# Phase 20: 기능 및 비기능 전체 점검 - 2
 
 ## 작업 항목
 
