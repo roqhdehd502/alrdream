@@ -7,6 +7,8 @@ export type AuthProvider = "LOCAL" | "GOOGLE" | "APPLE";
 export interface Member {
   id: string;
   email: string;
+  name: string | null;
+  provider: AuthProvider;
   role: MemberRole;
   plan: MemberPlan;
   proExpiresAt: string | null;

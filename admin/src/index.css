@@ -608,6 +608,34 @@ tbody tr.clickable:hover td {
   width: 100%;
 }
 
+.password-field-input {
+  position: relative;
+}
+
+.form-field .password-field-input input {
+  padding-right: 40px;
+}
+
+.password-toggle {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  padding: 5px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+}
+
+.password-toggle:hover {
+  color: var(--color-text);
+}
+
 .form-field input:focus,
 .form-field select:focus,
 .form-field textarea:focus {

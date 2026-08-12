@@ -7,10 +7,14 @@ export default function AppLayout() {
   return (
     <Stack
       screenOptions={{
-        headerStyle: { backgroundColor: colors.surface },
+        // 헤더가 ScreenContainer의 본문 배경(colors.bg)과 이어 붙어 보이도록 같은 토큰을 쓴다 —
+        // colors.surface를 쓰면 다크 모드에서 두 톤 차이가 뚜렷이 보이는 이음매가 생긴다.
+        headerStyle: { backgroundColor: colors.bg },
         headerTitleStyle: { color: colors.text, fontSize: 16, fontFamily: fontFamily.bold },
         headerTintColor: colors.text,
         headerShadowVisible: false,
+        // 화면 전환 중이나 헤더 바깥 영역에 React Navigation 기본 배경(테마 무관 고정값)이 비치지 않도록.
+        contentStyle: { backgroundColor: colors.bg },
       }}
     >
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />

@@ -12,6 +12,7 @@ import java.util.UUID;
 public record MemberAdminResponse(
 		@Schema(description = "회원 ID") UUID id,
 		@Schema(description = "이메일") String email,
+		@Schema(description = "표시 이름, 설정하지 않았으면 null") String name,
 		@Schema(description = "가입 경로") AuthProvider provider,
 		@Schema(description = "권한") MemberRole role,
 		@Schema(description = "요금제") MemberPlan plan,
@@ -23,8 +24,8 @@ public record MemberAdminResponse(
 
 	public static MemberAdminResponse from(Member member) {
 		return new MemberAdminResponse(
-				member.getId(), member.getEmail(), member.getProvider(), member.getRole(), member.getPlan(),
-				member.getProExpiresAt(), member.isBanned(), member.isPermanentBan(), member.getTempBanUntil(),
-				member.getCreatedAt());
+				member.getId(), member.getEmail(), member.getName(), member.getProvider(), member.getRole(),
+				member.getPlan(), member.getProExpiresAt(), member.isBanned(), member.isPermanentBan(),
+				member.getTempBanUntil(), member.getCreatedAt());
 	}
 }

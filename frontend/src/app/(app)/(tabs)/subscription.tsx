@@ -8,6 +8,7 @@ import { Badge } from "../../../components/ui/Badge";
 import { Button } from "../../../components/ui/Button";
 import { Card } from "../../../components/ui/Card";
 import { ErrorBanner, Loading } from "../../../components/ui/Feedback";
+import { IconChip } from "../../../components/ui/IconChip";
 import { ScreenContainer } from "../../../components/ui/ScreenContainer";
 import { useTheme, useThemedStyles } from "../../../components/ui/ThemeContext";
 import { fontFamily, shadows } from "../../../components/ui/theme";
@@ -24,8 +25,10 @@ function formatDate(value: string) {
 }
 
 // 실제로 구현된 Pro 전용 혜택만 소개한다 — [01] 13번 BM이 언급하는 "고급 분석"은 아직 별도 기능으로
-// 구현돼 있지 않아 여기 포함하지 않는다(혜택 과장 방지).
-const PRO_BENEFITS = ["AI 생성 횟수 무제한", "설계 문서 PDF 다운로드"];
+// 구현돼 있지 않아 여기 포함하지 않는다(혜택 과장 방지). Phase 20부터 Pro도 무제한이 아니라 월 10회 한도라
+// "무제한"이라고 쓰면 안 된다 — 정확한 한도는 admin에서 바뀔 수 있어 마이페이지의 실사용량 화면이 최종
+// 소스이고, 여기 숫자는 마케팅 카피용 스냅샷이다.
+const PRO_BENEFITS = ["월 10회 AI 생성", "설계 문서 PDF 다운로드"];
 // Pro 전용 혜택의 반대편 — 새 숫자를 지어내지 않고 PRO_BENEFITS와 대구를 이루는 사실만 적는다
 // (정확한 월 한도 수치는 마이페이지의 "이번 달 AI 생성 사용량"에서 보여준다, Phase 19 설계 결정).
 const FREE_LIMITATIONS = [
@@ -57,14 +60,6 @@ export default function SubscriptionScreen() {
       flexDirection: "row" as const,
       alignItems: "center" as const,
       gap: 10,
-    },
-    proIconWrap: {
-      width: 32,
-      height: 32,
-      borderRadius: 10,
-      backgroundColor: colors.surface,
-      alignItems: "center" as const,
-      justifyContent: "center" as const,
     },
     ribbon: { position: "absolute" as const, top: -12, right: 16, zIndex: 1 },
     confirmButtons: { flexDirection: "row" as const, gap: 10 },
@@ -221,9 +216,7 @@ export default function SubscriptionScreen() {
             >
               <View style={styles.planHeader}>
                 <View style={styles.proTitleRow}>
-                  <View style={styles.proIconWrap}>
-                    <SubscriptionIcon size={16} color={colors.primary} />
-                  </View>
+                  <IconChip icon={<SubscriptionIcon size={16} color={colors.primary} />} size={32} tone="surface" />
                   <Text style={typography.heading}>Pro 플랜</Text>
                 </View>
                 {isPro &&

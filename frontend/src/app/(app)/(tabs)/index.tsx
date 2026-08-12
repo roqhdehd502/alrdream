@@ -5,6 +5,8 @@ import { useAuth } from "../../../auth/AuthContext";
 import { workspacesApi } from "../../../api/workspaces";
 import { ScreenContainer } from "../../../components/ui/ScreenContainer";
 import { Card } from "../../../components/ui/Card";
+import { Avatar } from "../../../components/ui/Avatar";
+import { IconChip } from "../../../components/ui/IconChip";
 import { SubscriptionIcon, WorkspaceIcon } from "../../../components/ui/icons";
 import { useTheme, useThemedStyles } from "../../../components/ui/ThemeContext";
 
@@ -12,18 +14,11 @@ export default function HomeScreen() {
   const router = useRouter();
   const { member } = useAuth();
   const { colors, typography } = useTheme();
-  const styles = useThemedStyles((colors) => ({
+  const styles = useThemedStyles(() => ({
     wrap: { gap: 20 },
+    greetingRow: { flexDirection: "row" as const, alignItems: "center" as const, gap: 12 },
     hubCard: { gap: 4 },
     hubCardRow: { flexDirection: "row" as const, alignItems: "center" as const, gap: 14 },
-    hubIcon: {
-      width: 44,
-      height: 44,
-      borderRadius: 14,
-      backgroundColor: colors.primarySoft,
-      alignItems: "center" as const,
-      justifyContent: "center" as const,
-    },
     hubTextWrap: { flex: 1, gap: 2 },
   }));
 
@@ -41,18 +36,21 @@ export default function HomeScreen() {
   // member.plan은 결제 구독뿐 아니라 쿠폰/관리자 지급으로도 PRO가 되므로 이 값 하나만 보면 된다
   // (subscription.status는 "관리할 결제 구독이 있는지"만 알려줄 뿐 Pro 여부의 전체 신호가 아니다).
   const isPro = member?.plan === "PRO";
+  // 이름을 설정하지 않았으면 이메일 앞부분을 기본값으로 보여준다(Phase 20 — 표시 로직은 프론트 책임).
+  const displayName = member ? member.name ?? member.email.split("@")[0] : null;
 
   return (
     <ScreenContainer>
       <View style={styles.wrap}>
-        <Text style={typography.title}>안녕하세요{member?.email ? `, ${member.email.split("@")[0]}님` : ""}</Text>
+        <View style={styles.greetingRow}>
+          {member && <Avatar seed={member.id} label={displayName ?? member.email} size={44} />}
+          <Text style={typography.title}>안녕하세요{displayName ? `, ${displayName}님` : ""}</Text>
+        </View>
 
         <Pressable onPress={() => router.push("/workspaces")}>
           <Card style={styles.hubCard}>
             <View style={styles.hubCardRow}>
-              <View style={styles.hubIcon}>
-                <WorkspaceIcon size={20} color={colors.primary} />
-              </View>
+              <IconChip icon={<WorkspaceIcon size={20} color={colors.primary} />} />
               <View style={styles.hubTextWrap}>
                 <Text style={typography.heading}>워크스페이스</Text>
                 <Text style={typography.muted}>
@@ -66,9 +64,7 @@ export default function HomeScreen() {
         <Pressable onPress={() => router.push("/subscription")}>
           <Card style={styles.hubCard}>
             <View style={styles.hubCardRow}>
-              <View style={styles.hubIcon}>
-                <SubscriptionIcon size={20} color={colors.primary} />
-              </View>
+              <IconChip icon={<SubscriptionIcon size={20} color={colors.primary} />} />
               <View style={styles.hubTextWrap}>
                 <Text style={typography.heading}>구독</Text>
                 <Text style={typography.muted}>

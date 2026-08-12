@@ -1668,10 +1668,73 @@ API로 정리했다.
 
 ## 작업 항목
 
-- [ ] 무료인 경우 월 AI 생성횟수 제한을 1회, Pro인 경우 월 AI 생성횟수 제한을 10회로 (기획 변경)
-- [ ] 유저 이름 컬럼 옵셔널로 추가해서 수정할 수 있도록 하고 로그인 시 이름 표시 (기본값은 이메일로 표기, 기획 변경)
-- [ ] 유저 프로필 이미지는 임의의 시드값으로 생성된 배경색에 유저 이름의 첫글자만 따서 표시할 것 (Boring Avatars)
-- [ ] 앱 디자인을 구조적으로 완전 뜯어고쳐서 수정할 것 (참고 사항 : https://www.figma.com/community/file/1143575071825582037/task-management-to-do-list-app?q_id=0dec21c2-ac0a-4ffc-bff5-7ac7cae6e9de)
+- [x] 무료인 경우 월 AI 생성횟수 제한을 1회, Pro인 경우 월 AI 생성횟수 제한을 10회로 (기획 변경)
+- [x] 유저 이름 컬럼 옵셔널로 추가해서 수정할 수 있도록 하고 로그인 시 이름 표시 (기본값은 이메일로 표기, 기획 변경)
+- [x] 유저 프로필 이미지는 임의의 시드값으로 생성된 배경색에 유저 이름의 첫글자만 따서 표시할 것 (Boring Avatars)
+- [x] frontend 앱 디자인을 구조적으로 완전 뜯어고쳐서 수정할 것 (참고 사항 : https://www.figma.com/community/file/1143575071825582037/task-management-to-do-list-app?q_id=0dec21c2-ac0a-4ffc-bff5-7ac7cae6e9de)
+
+4단계(20-A 백엔드 → 20-B Admin → 20-C Frontend 공유 프리미티브 → 20-D Frontend 화면 적용)로 진행했다.
+
+**20-A**: `free_tier_settings.monthly_limit`을 `free_monthly_limit`으로 rename하고 `pro_monthly_limit`(기본 10)을
+추가하는 V10 마이그레이션 — 기존 행을 `free_monthly_limit=1`로 UPDATE했다. `UsageQuotaService`에서 PRO 조기
+return을 제거하고 plan별로 한도를 고르도록 바꿨다(엔드포인트/DTO는 이미 있어 새로 만들 필요 없었음 — 계획
+단계에서 오래된 조사 결과로 "없다"고 잘못 판단했던 것을 재조사로 바로잡았다). `users.name`(nullable)
+추가, `Member#changeName`(빈 값은 null로 정규화), `MemberService#updateName`, `PATCH /api/auth/me` 신설 —
+`withdraw`와 동일한 컨트롤러→서비스→엔티티 패턴. `MemberResponse`/`MemberAdminResponse`에 `name` 추가.
+실동작 검증: 테스트 계정으로 FREE 한도(1회)/PRO 한도(10회, DB에서 plan만 직접 PRO로 바꿔 확인 — 코드 자체
+수정 없이 값만 바꾼 것) 모두 `GET /api/usage-quota/me`가 정확한 `limitCount`를 돌려주는지 확인, `PATCH
+/api/auth/me`로 이름 저장 후 `GET /me`에 반영되는지 확인.
+
+**20-B**: `PromptQuotaPage.tsx`를 FREE/PRO 입력 2개로 확장(`admin/src/api/settings.ts`,
+`admin/src/types/index.ts` 필드명 동기화), `UsersPage.tsx`/`UserDetailPage.tsx`에 이름 컬럼/설명 추가.
+`tsc`/`vite build` 통과 확인 — 실브라우저 검증은 시드 admin 계정(`admin@alrdream.test`) 비밀번호를 몰라
+자격증명을 바꿔야 했는데, 그 write가 샌드박스 분류기에 막혀(이전 Flyway repair 때와 동일한 종류의 차단)
+건너뛰었다.
+
+**20-C**: 새 공유 프리미티브 `IconChip`/`Avatar`/`ProgressRing`/`PillTabs`/`FabButton`을
+`frontend/src/components/ui/`에 추가하고, 기존에 화면마다 제각각이던 "컬러 칩" 패턴(`hubIcon`/`proIconWrap`/
+`EmptyState.iconWrap`)을 `IconChip` 하나로 통합했다. `theme.ts`에 `radius.pill`(999) 추가, `Button`/`Card`/
+`Field`의 기본 radius를 키워 전체적으로 더 둥글게(Button은 완전 필 형태), 하단 탭바를 여백+큰 radius+그림자로
+"떠 있는" 느낌으로 바꿨다(중앙 노치+FAB는 하지 않음 — 4탭 전체에 걸친 공통 "추가" 액션이 없어서, 대신
+워크스페이스 탭에만 `FabButton`을 둠). 실브라우저 검증(라이트/다크): 탭바가 다크에서는 배경색 대비로
+뚜렷하게 떠 보이지만 라이트에서는 bg/surface 색이 너무 비슷해 덜 두드러짐(기존 팔레트 특성, 회귀 아님).
+`shadows.lg`가 react-navigation의 `tabBarStyle`을 통해 웹에 렌더링될 때는 `box-shadow`로 변환되지 않는
+프레임워크 특성을 확인했지만, radius+margin만으로도 의도한 "떠 있는 필" 형태는 정상 동작해 추가로 파고들지
+않았다.
+
+**20-D**: 홈(인사말 옆 `Avatar`, 허브 카드 `IconChip`), 워크스페이스 목록(인라인 "+ 새 워크스페이스" 버튼 →
+우하단 `FabButton`, 목록 카드에 `IconChip`), 구독 화면(`proIconWrap`을 `IconChip`으로 교체, "AI 생성 횟수
+무제한" 문구를 "월 10회 AI 생성"으로 수정), 마이페이지(`Avatar` + 표시 이름 편집 폼 신설 — 이 화면에 "필드
+입력 후 저장" 패턴이 처음 생김, 기존 `refreshMember()` 재사용, 선형 바 → `ProgressRing`, PRO 특수 케이스
+문구 제거, 구독 관리/쿠폰 행에 `IconChip`), 워크스페이스 상세(밑줄 탭 스트립 → `PillTabs`)까지 반영.
+`tsc`/`expo lint` 통과. 실브라우저 검증(테스트 계정 가입 → 홈 아바타/인사말 → 워크스페이스 탭 FAB → 구독
+화면 카피 → 마이페이지 이름 저장(즉시 홈 인사말에도 반영되는지까지) → 회원 탈퇴로 정리)까지 전부 확인.
+`ProgressRing`에서 `react-native-svg`의 `rotation`/`origin` 편의 prop이 웹에서 `Invalid DOM property`
+콘솔 에러를 내는 걸 발견해 명시적 SVG `transform` 문자열로 교체해 고쳤다. 워크스페이스 상세의 `PillTabs`
+적용은 AI 생성 잡을 실제로 완료해야 도달하는 화면이라(비용/시간 대비 리스크가 낮은 단순 프레젠테이션
+컴포넌트라 판단) 타입체크/코드 리뷰로 갈음하고 실브라우저 검증은 하지 않았다.
+
+**Phase 20 후속 요구사항 3건**:
+1. 비밀번호 표시/숨기기 토글 — frontend `Field.tsx`가 `secureTextEntry`를 받으면 자동으로 눈 아이콘 토글이
+   붙도록 고쳐 기존 5개 비밀번호 필드(로그인/회원가입 2개/재설정 2개)에 콜사이트 변경 없이 전파됐다. Admin은
+   `PasswordField.tsx` 신설, `LoginPage.tsx`의 로그인/새 비밀번호 필드 2곳에 적용. 둘 다 `EyeIcon`/`EyeOffIcon`을
+   각 앱의 기존 아이콘 스타일에 맞춰 추가.
+2. 다크 모드에서 상단 바 배경이 안 맞던 문제 — frontend가 웹 빌드 시 실제 DOM `<html>` 배경을 한 번도
+   테마와 동기화한 적이 없었던 게 원인(admin/index.html엔 있던 사전 페인트 부트스트랩이 frontend엔 없었음).
+   `frontend/src/app/+html.tsx`를 신설해 admin과 같은 기준(라이트를 명시 선호하지 않으면 다크가 기본값)으로
+   하이드레이션 전에 `<html>` 배경을 미리 칠하고, `ThemeContext.tsx`에 런타임 동기화도 추가해 세션 중 테마를
+   토글해도(재로드 없이) 바로 반영되게 했다. 처음엔 스크립트가 `document.body`도 같이 칠하려다 `<head>` 스크립트
+   실행 시점엔 `<body>`가 아직 파싱 전이라 조용히 실패하는 버그가 있었음을 실브라우저 검증 중 발견해 `<html>`만
+   칠하는 것으로 고쳤다(body는 배경을 안 두면 투명해 html 배경이 그대로 비친다).
+3. 회원 탈퇴 2단계화 — 1차 본인 확인(LOCAL 계정은 현재 비밀번호를 `/api/auth/login`으로 재검증, 세션 토큰은
+   저장하지 않고 성공 여부만 확인; 소셜 로그인 계정은 비밀번호가 없어 이메일 재입력으로 대체), 2차 "탈퇴합니다"
+   문구를 정확히 입력해야 버튼이 활성화. `MemberResponse`/frontend `Member` 타입에 `provider` 필드를 추가해
+   분기 근거로 썼다.
+
+세 항목 모두 backend/frontend/admin `compileJava`/`tsc`/`lint`/`build` 통과 확인 후, 실제로 서버 3개를 띄워
+Playwright로: 비밀번호 토글(두 앱 모두 입력→가리기→토글로 평문 확인), 다크 모드 상단 배경(라이트 시스템
+기본값에서 명시적 다크 전환 후 새로고침해도 유지되는지까지), 탈퇴 2단계(틀린 비밀번호 거부 → 올바른
+비밀번호 통과 → 문구 불일치 시 비활성 버튼 → 정확한 문구 입력 후 탈퇴 성공)까지 전부 확인했다.
 
 ---
 

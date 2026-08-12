@@ -57,8 +57,8 @@ export function Button({ label, onPress, variant = "primary", disabled, loading,
 const styles = StyleSheet.create({
   base: {
     paddingVertical: 12,
-    paddingHorizontal: 18,
-    borderRadius: radius.sm,
+    paddingHorizontal: 20,
+    borderRadius: radius.pill,
     alignItems: "center",
     justifyContent: "center",
     flexDirection: "row",

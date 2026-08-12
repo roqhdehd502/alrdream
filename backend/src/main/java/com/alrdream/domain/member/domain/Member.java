@@ -30,6 +30,9 @@ public class Member extends BaseEntity {
 	@Column(nullable = false, unique = true)
 	private String email;
 
+	/** Phase 20 — 옵셔널 표시 이름. NULL이면 프론트가 이메일로 대체해 보여준다(기본값 계산은 서버가 아닌 프론트 책임). */
+	private String name;
+
 	@Column(name = "password_hash")
 	private String passwordHash;
 
@@ -150,6 +153,11 @@ public class Member extends BaseEntity {
 	/** Phase 16 — 비밀번호 재설정. 호출 전에 provider가 LOCAL인지 확인하는 것은 호출부(PasswordResetService)의 책임이다. */
 	public void changePassword(String newPasswordHash) {
 		this.passwordHash = newPasswordHash;
+	}
+
+	/** Phase 20 — 표시 이름 변경. 빈 문자열/공백만 있는 값은 "이름 지우기"로 보고 null로 정규화한다(기본값 이메일로 복귀). */
+	public void changeName(String name) {
+		this.name = (name == null || name.isBlank()) ? null : name.trim();
 	}
 
 	public boolean isWithdrawn() {

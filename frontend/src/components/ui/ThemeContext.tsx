@@ -83,6 +83,14 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   const colors = scheme === "light" ? lightColors : darkColors;
   const typography = useMemo(() => createTypography(colors), [colors]);
 
+  // +html.tsx의 부트스트랩 스크립트는 최초 로드(하이드레이션 전) 페인트만 맡는다 — 세션 중 토글은 그
+  // 스크립트가 다시 실행되지 않으므로, 실제 <html> 배경을 계속 앱 테마와 맞춰주는 역할은 여기서 해야 한다.
+  useEffect(() => {
+    if (Platform.OS === "web" && typeof document !== "undefined") {
+      document.documentElement.style.backgroundColor = colors.bg;
+    }
+  }, [colors.bg]);
+
   const value = useMemo(
     () => ({ scheme, preference, colors, typography, ready, setPreference, toggleScheme }),
     // eslint-disable-next-line react-hooks/exhaustive-deps

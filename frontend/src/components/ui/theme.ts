@@ -51,6 +51,7 @@ export const radius = {
   sm: 8,
   md: 12,
   lg: 18,
+  pill: 999,
 };
 
 // RN 그림자는 CSS box-shadow와 달리 라이트/다크 공통으로 검정 기반이 자연스럽다(admin의 --shadow-*와 달리

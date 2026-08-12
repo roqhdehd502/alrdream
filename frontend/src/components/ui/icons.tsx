@@ -99,6 +99,33 @@ export function AccountIcon({ size = 17, color }: StrokeIconProps) {
   );
 }
 
+export function EyeIcon({ size = 17, color }: StrokeIconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
+      <Path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z" />
+      <Circle cx="12" cy="12" r="3" />
+    </Svg>
+  );
+}
+
+export function EyeOffIcon({ size = 17, color }: StrokeIconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
+      <Path d="M9.9 5.1A10.9 10.9 0 0 1 12 5c6.5 0 10 7 10 7a13.4 13.4 0 0 1-3.1 3.9M6.2 6.3A13.5 13.5 0 0 0 2 12s3.5 7 10 7a10.6 10.6 0 0 0 4.1-.8" />
+      <Path d="M9.5 9.5a3 3 0 0 0 4.2 4.2" />
+      <Path d="M2 2l20 20" />
+    </Svg>
+  );
+}
+
+export function PlusIcon({ size = 17, color }: StrokeIconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
+      <Path d="M12 5v14M5 12h14" />
+    </Svg>
+  );
+}
+
 export function TicketIcon({ size = 17, color }: StrokeIconProps) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">

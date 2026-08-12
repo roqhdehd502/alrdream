@@ -161,6 +161,7 @@ export function UsersPage() {
                 <tr>
                   <th style={{ width: 32 }}></th>
                   <th>이메일</th>
+                  <th>이름</th>
                   <th>가입 경로</th>
                   <th>권한</th>
                   <th>요금제</th>
@@ -179,6 +180,7 @@ export function UsersPage() {
                       />
                     </td>
                     <td>{member.email}</td>
+                    <td>{member.name ?? "-"}</td>
                     <td>{member.provider}</td>
                     <td>
                       {member.role === "ADMIN" ? (

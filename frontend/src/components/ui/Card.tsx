@@ -18,7 +18,7 @@ export function Card({
       backgroundColor: colors.surface,
       borderWidth: 1,
       borderColor: colors.border,
-      borderRadius: radius.md,
+      borderRadius: radius.lg,
       padding: spacing(4),
       gap: spacing(2),
       ...shadows.sm,

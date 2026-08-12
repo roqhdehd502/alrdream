@@ -5,6 +5,7 @@ import { authApi } from "../api/auth";
 import { ApiError } from "../api/client";
 import { getTheme, toggleTheme } from "../theme";
 import { MoonIcon, SunIcon } from "../components/icons";
+import { PasswordField } from "../components/PasswordField";
 
 type Mode = "login" | "reset-request" | "reset-confirm";
 
@@ -105,17 +106,14 @@ export function LoginPage() {
                   autoFocus
                 />
               </div>
-              <div className="form-field">
-                <label htmlFor="password">비밀번호</label>
-                <input
-                  id="password"
-                  type="password"
-                  autoComplete="current-password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
-                />
-              </div>
+              <PasswordField
+                id="password"
+                label="비밀번호"
+                autoComplete="current-password"
+                value={password}
+                onChange={setPassword}
+                required
+              />
               {error && (
                 <div className="alert alert-error" role="alert">
                   {error}
@@ -187,18 +185,15 @@ export function LoginPage() {
                   autoFocus
                 />
               </div>
-              <div className="form-field">
-                <label htmlFor="new-password">새 비밀번호 (8자 이상)</label>
-                <input
-                  id="new-password"
-                  type="password"
-                  autoComplete="new-password"
-                  value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
-                  required
-                  minLength={8}
-                />
-              </div>
+              <PasswordField
+                id="new-password"
+                label="새 비밀번호 (8자 이상)"
+                autoComplete="new-password"
+                value={newPassword}
+                onChange={setNewPassword}
+                required
+                minLength={8}
+              />
               {error && (
                 <div className="alert alert-error" role="alert">
                   {error}

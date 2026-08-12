@@ -179,7 +179,7 @@ export function UserDetailPage() {
       <Link to="/users" style={{ fontSize: 13, fontWeight: 600, marginBottom: 10, display: "inline-block" }}>
         ← 사용자 목록으로
       </Link>
-      <PageHeader title={member?.email ?? "사용자 상세"} />
+      <PageHeader title={member?.email ?? "사용자 상세"} description={member?.name ?? undefined} />
 
       <ErrorAlert message={error} />
 

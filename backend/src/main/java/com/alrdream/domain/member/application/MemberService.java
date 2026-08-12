@@ -52,6 +52,14 @@ public class MemberService {
 		refreshTokenStore.invalidate(memberId);
 	}
 
+	/** Phase 20 — 표시 이름 변경(옵셔널). 빈 값 전달은 {@link Member#changeName}이 "이름 지우기"로 처리한다. */
+	@Transactional
+	public Member updateName(UUID memberId, String name) {
+		Member member = getById(memberId);
+		member.changeName(name);
+		return member;
+	}
+
 	/** [03] §2-1 Admin의 CS 대응용 사용자 조회 — 이메일 부분 일치 검색. */
 	public Page<Member> search(String keyword, Pageable pageable) {
 		return StringUtils.hasText(keyword)

@@ -72,6 +72,7 @@ export interface PromptTemplateResponse {
 export interface MemberAdminResponse {
   id: string;
   email: string;
+  name: string | null;
   provider: AuthProvider;
   role: MemberRole;
   plan: MemberPlan;
@@ -116,7 +117,8 @@ export interface DashboardSummaryResponse {
 }
 
 export interface FreeTierLimitResponse {
-  monthlyLimit: number;
+  freeMonthlyLimit: number;
+  proMonthlyLimit: number;
   updatedAt: string;
 }
 

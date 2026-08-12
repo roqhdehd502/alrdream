@@ -6,6 +6,7 @@ import com.alrdream.domain.member.api.dto.OAuthLoginRequest;
 import com.alrdream.domain.member.api.dto.RefreshRequest;
 import com.alrdream.domain.member.api.dto.SignupRequest;
 import com.alrdream.domain.member.api.dto.TokenResponse;
+import com.alrdream.domain.member.api.dto.UpdateNameRequest;
 import com.alrdream.domain.member.application.AuthService;
 import com.alrdream.domain.member.application.AuthService.TokenIssueResult;
 import com.alrdream.domain.member.application.MemberService;
@@ -23,6 +24,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -104,13 +106,25 @@ public class AuthController {
 		return ResponseEntity.noContent().build();
 	}
 
-	@Operation(summary = "내 정보 조회", description = "access token으로 인증된 현재 회원의 정보(이메일, role, 요금제)를 조회한다.")
+	@Operation(summary = "내 정보 조회", description = "access token으로 인증된 현재 회원의 정보(이메일, 표시 이름, role, 요금제)를 조회한다.")
 	@ApiResponse(responseCode = "200", description = "조회 성공")
 	@ApiResponse(responseCode = "401", description = "인증되지 않은 요청 (access token 없음/만료)")
 	@SecurityRequirement(name = "bearerAuth")
 	@GetMapping("/me")
 	public ResponseEntity<MemberResponse> me(@AuthenticationPrincipal MemberPrincipal principal) {
 		return ResponseEntity.ok(MemberResponse.from(memberService.getById(principal.memberId())));
+	}
+
+	@Operation(
+			summary = "표시 이름 변경",
+			description = "옵셔널 표시 이름을 변경한다. 빈 값을 보내면 이름을 지우고 기본값(이메일)으로 되돌린다.")
+	@ApiResponse(responseCode = "200", description = "변경 성공")
+	@ApiResponse(responseCode = "401", description = "인증되지 않은 요청 (access token 없음/만료)")
+	@SecurityRequirement(name = "bearerAuth")
+	@PatchMapping("/me")
+	public ResponseEntity<MemberResponse> updateName(
+			@AuthenticationPrincipal MemberPrincipal principal, @Valid @RequestBody UpdateNameRequest request) {
+		return ResponseEntity.ok(MemberResponse.from(memberService.updateName(principal.memberId(), request.name())));
 	}
 
 	@Operation(
