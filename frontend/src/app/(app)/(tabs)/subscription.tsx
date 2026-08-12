@@ -4,12 +4,14 @@ import { useRouter } from "expo-router";
 import { useAuth } from "../../../auth/AuthContext";
 import { subscriptionApi } from "../../../api/subscription";
 import { ApiError } from "../../../api/client";
+import { Badge } from "../../../components/ui/Badge";
 import { Button } from "../../../components/ui/Button";
 import { Card } from "../../../components/ui/Card";
 import { ErrorBanner, Loading } from "../../../components/ui/Feedback";
 import { ScreenContainer } from "../../../components/ui/ScreenContainer";
 import { useTheme, useThemedStyles } from "../../../components/ui/ThemeContext";
-import { CheckIcon } from "../../../components/ui/icons";
+import { fontFamily, shadows } from "../../../components/ui/theme";
+import { CheckIcon, SubscriptionIcon } from "../../../components/ui/icons";
 import { SubscriptionStatusBadge } from "../../../components/subscription/SubscriptionStatusBadge";
 import type { PricingResponse, SubscriptionResponse } from "../../../types";
 
@@ -24,30 +26,66 @@ function formatDate(value: string) {
 // 실제로 구현된 Pro 전용 혜택만 소개한다 — [01] 13번 BM이 언급하는 "고급 분석"은 아직 별도 기능으로
 // 구현돼 있지 않아 여기 포함하지 않는다(혜택 과장 방지).
 const PRO_BENEFITS = ["AI 생성 횟수 무제한", "설계 문서 PDF 다운로드"];
+// Pro 전용 혜택의 반대편 — 새 숫자를 지어내지 않고 PRO_BENEFITS와 대구를 이루는 사실만 적는다
+// (정확한 월 한도 수치는 마이페이지의 "이번 달 AI 생성 사용량"에서 보여준다, Phase 19 설계 결정).
+const FREE_LIMITATIONS = [
+  "월 AI 생성 횟수 제한",
+  "설계 문서 PDF 다운로드 미지원",
+];
 
 export default function SubscriptionScreen() {
   const router = useRouter();
   const { member, refreshMember } = useAuth();
-  const { typography } = useTheme();
+  const { colors, typography } = useTheme();
   const styles = useThemedStyles((colors) => ({
-    wrap: { gap: 24 },
+    wrap: { gap: 20 },
     section: { gap: 12 },
+    planCard: { gap: 14, position: "relative" as const },
+    proCard: {
+      backgroundColor: colors.primarySoft,
+      borderColor: colors.primary,
+      borderWidth: 1,
+      ...shadows.md,
+    },
+    currentCard: { borderWidth: 2, borderColor: colors.primary },
     planHeader: {
       flexDirection: "row" as const,
       alignItems: "center" as const,
       justifyContent: "space-between" as const,
     },
+    proTitleRow: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      gap: 10,
+    },
+    proIconWrap: {
+      width: 32,
+      height: 32,
+      borderRadius: 10,
+      backgroundColor: colors.surface,
+      alignItems: "center" as const,
+      justifyContent: "center" as const,
+    },
+    ribbon: { position: "absolute" as const, top: -12, right: 16, zIndex: 1 },
     confirmButtons: { flexDirection: "row" as const, gap: 10 },
     benefitRow: {
       flexDirection: "row" as const,
       alignItems: "center" as const,
-      gap: 8,
+      gap: 10,
     },
     benefitCheck: {
-      width: 18,
-      height: 18,
-      borderRadius: 9,
+      width: 20,
+      height: 20,
+      borderRadius: 10,
       backgroundColor: colors.primary,
+      alignItems: "center" as const,
+      justifyContent: "center" as const,
+    },
+    limitMark: {
+      width: 20,
+      height: 20,
+      borderRadius: 10,
+      backgroundColor: colors.border,
       alignItems: "center" as const,
       justifyContent: "center" as const,
     },
@@ -56,6 +94,7 @@ export default function SubscriptionScreen() {
       alignItems: "baseline" as const,
       gap: 8,
     },
+    bigPrice: { fontSize: 32, fontFamily: fontFamily.bold, color: colors.text },
     priceStrike: {
       ...typography.muted,
       textDecorationLine: "line-through" as const,
@@ -146,18 +185,53 @@ export default function SubscriptionScreen() {
   return (
     <ScreenContainer>
       <View style={styles.wrap}>
-        <View style={styles.section}>
-          {subscription === undefined ? (
-            <Loading />
-          ) : (
-            <Card style={styles.section}>
+        {subscription === undefined ? (
+          <Loading />
+        ) : (
+          <>
+            <Card style={[styles.planCard, !isPro && styles.currentCard]}>
               <View style={styles.planHeader}>
-                <Text style={typography.heading}>
-                  {isPro ? "Pro 플랜" : "Free 플랜"}
-                </Text>
-                {subscription && (
-                  <SubscriptionStatusBadge status={subscription.status} />
-                )}
+                <Text style={typography.heading}>Free 플랜</Text>
+                {!isPro && <Badge label="현재 플랜" tone="neutral" />}
+              </View>
+
+              <View style={styles.priceRow}>
+                <Text style={styles.bigPrice}>0원</Text>
+                <Text style={typography.muted}>/ 월</Text>
+              </View>
+
+              <View style={styles.section}>
+                {FREE_LIMITATIONS.map((item) => (
+                  <View key={item} style={styles.benefitRow}>
+                    <View style={styles.limitMark}>
+                      <CheckIcon size={11} color={colors.textMuted} />
+                    </View>
+                    <Text style={typography.muted}>{item}</Text>
+                  </View>
+                ))}
+              </View>
+            </Card>
+
+            <Card
+              style={[
+                styles.planCard,
+                styles.proCard,
+                isPro && styles.currentCard,
+              ]}
+            >
+              <View style={styles.planHeader}>
+                <View style={styles.proTitleRow}>
+                  <View style={styles.proIconWrap}>
+                    <SubscriptionIcon size={16} color={colors.primary} />
+                  </View>
+                  <Text style={typography.heading}>Pro 플랜</Text>
+                </View>
+                {isPro &&
+                  (hasActiveSubscription && subscription ? (
+                    <SubscriptionStatusBadge status={subscription.status} />
+                  ) : (
+                    <Badge label="현재 플랜" tone="primary" />
+                  ))}
               </View>
 
               {isPro && !hasActiveSubscription && member?.proExpiresAt && (
@@ -225,14 +299,14 @@ export default function SubscriptionScreen() {
                             <Text style={styles.priceStrike}>
                               {pricing.basePriceKrw.toLocaleString("ko-KR")}원
                             </Text>
-                            <Text style={typography.title}>
+                            <Text style={styles.bigPrice}>
                               {pricing.promoPriceKrw.toLocaleString("ko-KR")}원
                             </Text>
                             <Text style={typography.muted}>/ 월</Text>
                           </>
                         ) : (
                           <>
-                            <Text style={typography.title}>
+                            <Text style={styles.bigPrice}>
                               {pricing.basePriceKrw.toLocaleString("ko-KR")}원
                             </Text>
                             <Text style={typography.muted}>/ 월</Text>
@@ -253,7 +327,7 @@ export default function SubscriptionScreen() {
                       label="Pro 구독하기"
                       onPress={handleSubscribe}
                       loading={busy}
-                      style={{ alignSelf: "flex-start" }}
+                      style={{ alignSelf: "stretch" }}
                     />
                   ) : (
                     <Text style={typography.muted}>
@@ -264,8 +338,8 @@ export default function SubscriptionScreen() {
                 </>
               )}
             </Card>
-          )}
-        </View>
+          </>
+        )}
 
         <Button
           label="결제 내역 보기"
