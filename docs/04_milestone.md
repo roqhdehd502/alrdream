@@ -1260,31 +1260,680 @@ number, totalElements, totalPages}}` 형태 응답 확인.
 
 # Phase 17: 후속 업데이트 - 2
 
-> 현재 서비스의 UI의 퀄리티가 낮은 관계로 더욱 심미적으로 개선한다.
+> 현재 서비스의 UI의 퀄리티가 낮은 관계로 심미적으로 전면 개편 한다.
 
-- [ ] admin을 대상으로 전체 UI 개선
-- [ ] frontend를 대상으로 전체 UI 개선
+- [x] admin을 대상으로 전체 UI 개선
+- [x] frontend를 대상으로 전체 UI 개선
+
+## 작업 내용 (admin)
+
+실제로 로그인해 Dashboard/Users 화면을 스크린샷으로 확인한 결과, 원인은 "디자인 시스템 부재"가 아니라
+`admin/src/index.css`에 이미 정의된 색상/그림자 토큰(`docs/05_color_and_font.md` 기준)이 거의 쓰이지 않고
+있었던 것 — 구조 개편이 아닌 **톤앤매너 폴리싱**으로 범위를 좁혀 진행(사용자 확인: Admin 먼저 / 폴리싱 수준 /
+기존 브랜드 가이드 기준).
+
+- `index.css` 중심으로 개선(공용 클래스라 6개 페이지에 자동 전파): `.btn`/`.btn-primary`/`.theme-toggle-fab`에
+  그림자 추가, 네이티브 `<select>`에 커스텀 chevron·appearance reset 적용(+ `.form-field select`와의 중복
+  선언 정리), `.stat-value-success/-warning/-danger` 상태색 modifier, 중첩 카드용 `.card--nested`(recessed
+  패널), 반복되던 인라인 `width:100%` 대체용 `.btn-block`, 반복되던 `justify-content:space-between` 헤더
+  패턴 대체용 `.card-header`, 카드 밖 제목용 `.section-heading`, 아이콘 슬롯이 생긴 `.empty-state`.
+- `Feedback.tsx`의 `EmptyState`에 `icon?` prop 추가(기본값: 신규 `InboxIcon`) — 5개 호출부 모두 자동 적용.
+- `DashboardPage.tsx` 통계 카드에 상태색 적용(결제 성공/실패, 정상 결제 중/대기·실패/해지됨).
+- `UserDetailPage.tsx`가 다른 5개 페이지와 다르게 `<PageHeader>`를 안 쓰고 손으로 마크업을 만들고 있던 것을
+  통일, 워크스페이스 상태 컬럼에 배지 적용(`WorkspaceStatus` enum이 현재 `ACTIVE` 하나뿐이라 실사용 시
+  분기는 없지만 다른 상태 컬럼과 시각적 일관성은 맞춤).
+- `PromptTemplatesPage.tsx`/`SurveyDefinitionsPage.tsx` 미리보기 헤더에 `.card-header`, `SurveyDefinitionsPage`의
+  `QuestionEditor`(카드 안에 중첩되는 카드)에 `.card--nested` 적용.
+- Playwright로 라이트/다크 테마 각각 Dashboard/Users/UserDetail/PromptTemplates/SurveyDefinitions 실측
+  확인 — 다크 테마에서 `.card--nested`의 recessed 효과가 뚜렷하게 드러남(라이트 테마는 surface/bg 색상
+  차이가 원래 작아 대비가 상대적으로 은은함, 토큰 값 자체는 기존 브랜드 가이드 그대로라 이번 스코프에서
+  건드리지 않음).
+- `admin/src/pages/UsersPage.tsx`는 별도 JSX 변경 없이 CSS 개선만으로 자동 적용됨.
+
+## 작업 내용 (frontend)
+
+Admin과 동일한 패턴이었다 — `frontend/src/components/ui/theme.ts`에 색상/radius/spacing/폰트 토큰은
+브랜드 가이드대로 잘 정의돼 있는데 **그림자(shadow/elevation) 토큰이 아예 없었음**. 앱 전체에서 그림자를
+쓰는 곳은 `ThemeMenuButton`(드롭다운)과 `JobCompletionBanner`(토스트) 2곳뿐이었고 그마저 값이 하드코딩돼
+서로 달랐다. 기본 `Card`/`Button`은 완전히 flat. 여기에 더해 "위험 확인 박스"(회원탈퇴/버전·워크스페이스
+삭제)가 5개 파일에 미세하게 다른 두 모양으로 중복 구현돼 있었다. Admin과 동일하게 **톤앤매너 폴리싱**
+범위로 진행(레이아웃/네비게이션 구조 변경 없음).
+
+- `theme.ts`에 `shadows.sm/md/lg` 토큰 추가 — `radius`/`spacing`과 같은 층위. `lg`는 `ThemeMenuButton`의
+  기존 하드코딩 값과 동일(시각적 변화 없이 토큰화만), `md`는 `JobCompletionBanner`의 값과 거의 동일하게
+  맞춰 두 파일 모두 토큰 재사용으로 리팩터링.
+- `Card.tsx`에 기본 그림자(`shadows.sm`) 적용(공용 컴포넌트라 워크스페이스 목록/버전 목록/설문 옵션 등
+  전체에 자동 전파) + `tone?: "default" | "danger"` prop 추가. 이 `tone="danger"`로 `account.tsx`,
+  `SettingsTab.tsx`(각각 `dangerSection`), `PlanningTab`/`AnalysisTab`/`DesignTab`(각각 `confirmRow`) — 5곳의
+  중복된 위험 확인 박스 스타일을 전부 `<Card tone="danger">`로 교체하고 로컬 스타일 정의를 삭제했다.
+- `Button.tsx`의 `primary`/`secondary`/`danger` variant에 그림자 적용(`ghost`는 배경이 투명이라 제외).
+- `Feedback.tsx`의 `EmptyState`에 `icon?` prop 추가(기본값: 신규 `InboxIcon`, `icons.tsx`에 추가) — admin의
+  동일 변경과 같은 패턴. PlanningTab/AnalysisTab/DesignTab의 9개 호출부는 label만 넘기던 걸 그대로 둬도
+  기본 아이콘이 자동으로 붙는다.
+- `generating.tsx`가 `ScreenContainer`/상태색 없이 손으로 만든 화면이었던 것을 정리 — `ScreenContainer
+scroll={false}`로 교체(태블릿/데스크톱 반응형 폭 제한도 자동으로 따라옴), 상태 텍스트에 tone 색상
+  적용(PROCESSING/PENDING→primary, FAILED→danger). `StatusBadge`처럼 별도 `Badge` 컴포넌트로 바꾸는 대신
+  기존 큰 heading 타이포그래피는 유지한 채 색상만 입혔다 — 전체 화면 히어로 텍스트를 작은 pill(`Badge`,
+  12px)로 바꾸면 시각적 위계가 오히려 후퇴하는 문제가 있어, 계획 원안(Badge로 교체)의 취지(상태를 무채색
+  텍스트로 방치하지 않기)는 지키되 구현 방식만 이 화면 맥락에 맞게 조정했다.
+- `components/survey/TextField.tsx`의 `fontSize: 14.5`를 `Field.tsx`와 동일한 `15`로 통일.
+- `PlanningTab`/`AnalysisTab`/`DesignTab`에서 `confirmRow`가 `useThemedStyles(colors => ...)`의 유일한
+  `colors` 사용처였어서, 스타일 제거 후 `colors` 매개변수도 함께 제거(미사용 변수 방지).
+- `npx tsc --noEmit`/`npx expo lint` 클린. Playwright로 웹 빌드 로그인 후 라이트/다크 각각 워크스페이스
+  목록(빈 상태 아이콘), 계정 화면(위험 확인 박스), 새 워크스페이스 생성 화면(브랜치 선택 카드 그림자)을
+  실측 확인 — 다크 테마에서 카드 그림자와 위험 박스의 붉은 톤 대비가 뚜렷하게 드러남. `generating.tsx`는
+  실제 AI 생성을 트리거하지 않고 코드 리뷰로 대체(비용/시간 문제).
 
 ---
 
-# Phase 18: 기능 및 비기능 전체 점검 - 2
+# Phase 18: 후속 업데이트 - 3
+
+> 현재 도메인에서 기획에서 누락된 부분을 확인하고 반영한다.
+> 현재 도메인에서 추가적인 필요한 기능이 있는지 확인 후 반영한다.
+
+- [x] [01]/[02]/[03] 명세 대비 실제 구현 갭 확인 및 수정
+- [x] BM([01] 13번) Pro 게이팅 반영 — 설계 문서 PDF export를 Pro 전용으로 제한
+- [x] 도메인에 추가로 필요한 기능 후보 조사 및 구현 — Pro 구독 가입/해지/결제내역/사용량 조회 프론트엔드
+- [x] Admin의 BM/구독/결제 관리 기능 재점검 및 보완 — 개별 결제 내역 조회 화면 추가
+- [x] 정기 구독 상품 소개 UI(Frontend) + 가격/프로모션 관리(Admin) 추가 — 하드코딩 가격을 DB 기반으로 구조 변경
+
+## 작업 내용 — 명세 갭 수정
+
+[01]/[02]/[03] 세 문서와 실제 백엔드/프론트 구현을 항목별로 대조한 결과, 아래 4가지 불일치를 확인하고 모두
+수정했다. 모두 기존 설계 의도(코드 주석에 이미 남아있던 의도 포함)를 그대로 따라가는 수정이라 별도 구조
+변경 없이 진행했다.
+
+- **버전 다중 삭제 UI 부재** ([01] 6/9/11번) — 백엔드는 이미 다건 삭제(`DeletePlanningVersionsRequest.versionIds`
+  등)를 지원했지만, 프론트 `VersionList`에 체크박스가 없어 실제로는 한 번에 1개씩만 삭제 가능했다.
+  `VersionList`에 `selectable`/`selectedIds`/`onToggleSelect` prop과 체크박스 UI(`icons.tsx`에 `CheckIcon`
+  추가)를 얹고, `PlanningTab`/`AnalysisTab`/`DesignTab`의 목록 화면에 "선택 삭제" 토글 + 선택 개수 표시 +
+  확인 카드(`Card tone="danger"`)를 추가해 기존 백엔드 다건 삭제 엔드포인트를 그대로 호출하도록 배선했다.
+- **분석 "수정" 버튼 부재** ([01] 8번) — `AnalysisVersionService`에는 "'수정'이 입력 차이 없이 생성 엔드포인트를
+  그대로 다시 호출하는 방식"이라는 주석이 이미 있었지만, `AnalysisTab`의 버전 상세 화면에는 정작 그 버튼이
+  없었다(목록 화면의 "새로 분석하기"만 존재). 상세 화면에 "수정" 버튼을 추가해 동일한 재생성 엔드포인트를
+  호출하도록 배선했다(기획/설계 탭과 동일한 위치·순서).
+- **소프트 삭제된 상위 버전의 하위 조회 차단** ([03] §5) — "상위(기획)가 삭제돼도 하위(분석/설계)는 조회만
+  가능하고 재생성만 막는다"는 명세와 달리, 실제로는 상위가 소프트 삭제되면 하위 상세 조회/PDF까지 함께
+  막혔다. `PlanningVersionService`/`AnalysisVersionService`에 조회 전용 `getForRead`(조상의 `deletedAt`을
+  보지 않는 조회 경로)를 추가하고, 목록/상세/PDF 경로만 여기로 옮겼다. 생성·재생성(`create`) 경로는 기존
+  `getOwned`(엄격 검사)를 그대로 써서 재생성 차단은 유지된다.
+- **설계 탭이 워크스페이스의 "최신 완료 분석"만 추적** — `AnalysisTab`에서 특정(반드시 최신은 아닌) 분석
+  버전을 골라 "설계 시작"을 눌러도, `DesignTab`은 항상 워크스페이스 전체의 최신 완료 분석을 기준으로
+  설계 버전 목록을 조회해 방금 만든 설계가 안 보일 수 있는 구조였다. "설계 시작"/설계 "수정" 완료 후
+  redirect URL에 `analysisVersionId` 쿼리 파라미터를 실어 보내고, `DesignTab`이 이를 `preferredAnalysisVersionId`로
+  받아 해당 분석 버전을 직접 조회하도록 수정했다(파라미터가 없을 때는 기존 "최신 완료 분석" 기본 동작 유지).
+
+## 작업 내용 — BM Pro 게이팅
+
+[01] 13번은 Pro 구독 혜택으로 "설계 문서 export"를 명시하지만, 실제 코드엔 게이팅이 전혀 없어 Free
+유저도 설계 PDF를 무제한으로 받을 수 있었다. `DesignVersionService.generatePdf`에 `MemberRepository`를
+주입해 `member.getPlan() != PRO`면 새로 추가한 `ForbiddenException`(403, code=`PRO_ONLY_FEATURE`)을
+던지도록 했다(`GlobalExceptionHandler`에 핸들러 추가). 프론트 `PdfButton`은 기존 `ApiError` 메시지 표시
+로직을 그대로 재사용해 별도 변경 없이 "설계 문서 PDF 다운로드는 Pro 구독 전용 기능입니다." 메시지가 뜬다.
+
+## 검증
+
+`./gradlew compileJava`, `npx tsc --noEmit`, `npx expo lint` 모두 클린. 로컬에서 백엔드/프론트 기동 후
+Playwright로 실제 계정을 만들어 기획→분석→설계 전체 체인을 API+UI 혼합으로 직접 실행해 확인:
+버전 다중 삭제(체크박스 선택→일괄 삭제 성공), 분석 상세의 "수정" 버튼 노출, 분석 결과에 합법성/자원
+확보 가능성/경쟁 환경/핵심 기능 후보 섹션이 실제로 채워짐, DESIGN 설문 Q1 옵션이 해당 분석의 핵심 기능
+후보로 동적 주입됨, 설계 탭이 방금 생성한 설계 버전을 정상적으로 보여줌, 설계 PDF 다운로드 시도 시 Free
+플랜 계정에 403(`PRO_ONLY_FEATURE`) 메시지가 뜨는 것까지 확인. 검증에 쓴 계정/워크스페이스는 앱 자체의
+회원 탈퇴(`DELETE /api/auth/me`)/워크스페이스 삭제 API로 정리했다.
+
+## 신규 기능 — Pro 구독 가입/해지/결제내역/사용량 조회 (프론트엔드)
+
+당초 "현재 도메인에 추가로 필요한 기능이 있는지 확인" 지시에 따라 조사해 아래 2가지 갭을 제안만 하고
+넘어갔으나("Pro 구독 가입/결제 프론트엔드 UI 전무", "Free 티어 잔여 생성 횟수 확인 불가"), 사용자가 확인
+후 곧바로 구현을 요청해 이어서 진행했다. 백엔드도 "조회"만 가능했지 사용자 본인이 해지하거나 결제 내역을
+볼 방법이 없어, 이번에 백엔드까지 함께 보완했다.
+
+**백엔드 추가**
+
+- `subscriptions.next_payment_schedule_id`(V7 마이그레이션) — PortOne에 등록된 마지막 결제 예약 ID를
+  저장해둔다. 사용자가 해지할 때 이 값으로 `PaymentScheduleClient.revokePaymentSchedules(billingKey,
+scheduleIds)`를 호출해 PortOne 쪽 예약 자체를 취소해야 한다는 걸 SDK 소스(`server-sdk-0.24.0.jar`
+  디컴파일 확인)로 검증하고 구현했다 — 이 호출 없이 DB 상태만 CANCELED로 바꾸면 PortOne은 예정대로
+  다음 달 결제를 진행해버리는 실제 과금 버그가 났을 것이다. 최초 구독 시점(`SubscriptionController.subscribe`)과
+  웹훅의 반복 재예약 시점(`PortOneWebhookService#rescheduleNextPayment`) 둘 다에서 이 값을 갱신한다.
+- `DELETE /api/subscriptions/me` — 사용자 본인 해지. 즉시 발효, 남은 기간 일할 환불 없음(정책 단순화,
+  이 이상의 환불/유예 로직은 스코프 밖).
+- `GET /api/subscriptions/me/payments` — 결제 내역 조회(해지 후 재구독으로 여러 구독 이력이 있어도 통합).
+- `GET /api/usage-quota/me`(신규 `UsageQuotaController`) — 이번 달 AI 생성 사용량/한도 조회 전용
+  읽기 메서드(`UsageQuotaService#getCurrent`, 기존 `checkAndIncrement`와 달리 row를 만들거나 값을
+  바꾸지 않는다).
+
+**프론트엔드 추가**
+
+- `@portone/browser-sdk` 설치. 빌링키 발급(`requestIssueBillingKey`)은 브라우저 전용 SDK라 동적
+  import로 감싸 웹에서만 동작하게 하고(`frontend/src/api/portone.ts`), `EXPO_PUBLIC_PORTONE_STORE_ID`/
+  `EXPO_PUBLIC_PORTONE_CHANNEL_KEY` 환경변수를 추가했다(공개 식별자라 `EXPO_PUBLIC_`로 노출해도 안전 —
+  API 시크릿/웹훅 시크릿과는 다름). §4-5 Google 로그인과 동일하게 네이티브에서는 "웹에서 신청하라"는
+  안내만 보여준다(네이티브 지원은 공식 `@portone/react-native-sdk` 도입이 필요한 별도 작업으로 후순위).
+- `app/(app)/subscription.tsx` 신규 화면 — 현재 플랜/상태 배지, (Free) Pro 구독 버튼, (Pro) 다음 결제일과
+  해지 버튼(확인 카드 포함), 이번 달 AI 생성 사용량(진행률 바), 결제 내역 목록을 한 화면에서 보여준다.
+  `account.tsx`에 플랜 표시 + "구독 보기" 진입 버튼을 추가해 연결했다.
+
+**한계 — 실결제 미검증**: PortOne 실제 테스트 스토어 자격증명이 없어 빌링키 발급→결제→웹훅 확정까지의
+전체 결제 플로우는 라이브로 검증하지 못했다. `npx tsc --noEmit`/`npx expo lint`/`./gradlew compileJava`
+클린, PortOne 브라우저 SDK의 실제 타입 정의(`unpkg`로 `.d.ts` 확인)와 서버 SDK의 실제 클래스 시그니처
+(jar 디컴파일)를 근거로 구현했고, 로컬에서 실제 계정으로 화면 렌더링·API 응답(Free 플랜 표시, 사용량
+0/5회, 빈 결제 내역, 크리덴셜 미설정 시 "결제 설정이 아직 완료되지 않았습니다" 에러 배너, 해지
+엔드포인트의 400 처리)까지는 확인했다. `EXPO_PUBLIC_PORTONE_STORE_ID`/`CHANNEL_KEY`와 `backend/.env`의
+`PORTONE_API_SECRET`/`PORTONE_WEBHOOK_SECRET`/`PORTONE_STORE_ID`/`PORTONE_CHANNEL_KEY`에 실제 PortOne
+콘솔 값을 채운 뒤, 최소 한 번은 실제(또는 PortOne 테스트 모드) 카드로 구독→해지까지 직접 확인이 필요하다.
+
+**추가 검증(실제 PortOne 자격증명 반영 후)**: 사용자가 `frontend/.env`에 `EXPO_PUBLIC_PORTONE_STORE_ID`/
+`EXPO_PUBLIC_PORTONE_CHANNEL_KEY`를 채워 넣었고, `backend/.env`에도 이미 대응하는 `PORTONE_STORE_ID`/
+`PORTONE_CHANNEL_KEY`/`PORTONE_API_SECRET`/`PORTONE_WEBHOOK_SECRET`가 설정돼 있었다. 실제 계정으로
+"Pro 구독하기"를 눌러 PortOne SDK 모달을 열어보니 카드 등록 단계에서 "아임포트테스트 — 실제 결제가
+안되는 테스트입니다" 문구가 떠 이 채널이 테스트 연동임을 확인했고, 테스트 카드번호(4242-4242-4242-4242)로
+카드 등록 단계까지는 정상 진행됨을 확인했다. 다음 단계(본인인증 — 주민등록번호 앞 7자리 + 휴대폰 SMS
+인증)는 실제 개인정보/실물 휴대폰이 필요해 자동화 환경에서 더 진행할 수 없어 결제 취소로 흐름을 종료했다.
+이때 프론트엔드가 PortOne 응답(`PAY_PROCESS_CANCELED`)을 에러 배너에 정상적으로 표시하고 로딩 상태를
+깨끗이 되돌리는 것까지 확인했다 — 즉 빌링키 발급 SDK 연동 자체(스토어/채널 자격증명, 요청 파라미터,
+에러 처리)는 실제로 동작함을 검증했고, 남은 미검증 구간은 본인인증 이후의 웹훅 확정 단계뿐이다. 이
+구간은 실제 휴대폰으로 본인인증을 완료할 수 있는 사람이 최소 한 번 직접 확인해야 한다.
+
+## 작업 내용 — Admin BM/구독/결제 관리 재점검
+
+Admin 대시보드(`DashboardPage.tsx`)는 이미 Phase 16부터 Pro 구독 현황 목록/요약, FREE 티어 월별 생성
+한도 조정([01] 13번 BM)을 지원하고 있어 "구독 관리"·"BM 관리" 자체는 누락이 아니었다. 다만 대시보드에는
+"이번 달 결제 성공/실패 건수" 집계만 있을 뿐, 개별 결제 시도(누가 언제 얼마를 결제/실패했는지) 내역을
+조회할 방법이 전혀 없었다 — 이 부분이 실제 갭이었다.
+
+- **백엔드**: `PaymentHistoryRepository`에 상태 필터/구독ID 목록 기반 페이지 조회 메서드 추가. 신규
+  `PaymentAdminService`가 결제 이력→구독→회원 2단계 조인을 배치 조회(N+1 방지)로 처리해 이메일까지
+  함께 반환한다. `GET /api/admin/payments`(전체 결제 내역, 상태 필터) — `SubscriptionAdminController`와
+  동일한 패턴 — 와 `GET /api/admin/users/{userId}/payments`(사용자 상세의 CS용 드릴다운, `WorkspaceAdminController`와
+  동일한 패턴) 두 엔드포인트를 추가했다.
+- **프론트엔드(Admin)**: 신규 `PaymentsPage.tsx`("결제 관리" — 사이드바에 `PaymentIcon` 신규 아이콘과
+  함께 추가)와 `UserDetailPage.tsx`의 "결제 내역" 섹션(사용자별 페이지네이션 테이블)을 추가했다.
+
+**검증**: `./gradlew compileJava`, `npx tsc --noEmit`, `npm run build`, `oxlint` 모두 클린. 회원가입 후
+DB에서 `role='ADMIN'`으로 승격한 테스트 계정으로 Playwright 실동작 검증 — `/api/admin/payments`(전체·
+상태 필터 둘 다), `/api/admin/users/{userId}/payments`(빈 목록), 존재하지 않는 사용자 조회 시 400을
+API 레벨에서 직접 확인했고, Admin 콘솔에서 "결제 관리" 사이드바 진입 → 빈 상태 렌더링 → 상태 필터
+전환 → 사용자 상세의 "결제 내역" 섹션까지 콘솔 에러 없이 렌더링됨을 확인했다. 실제 결제 레코드가 아직
+없어(라이브 결제 미완료) 데이터가 채워진 테이블 렌더링은 확인하지 못했으나, 실제 Supabase DB에 검증용
+가짜 결제 레코드를 직접 INSERT하는 시도는 이번 세션의 권한 정책상 차단되어 시도하지 않았다 — 실제 결제가
+한 번이라도 완료되면(위 "추가 검증" 항목 참고) 이 화면에서 정상적으로 채워진 목록을 볼 수 있을 것이다.
+테스트 계정은 모두 자체 API(`DELETE /api/auth/me`)로 정리했다.
+
+## 작업 내용 — 정기 구독 상품 소개(Frontend) + 가격/프로모션 관리(Admin)
+
+사용자 요청: "결제 상품 소개 페이지 UI(프론트엔드)"와 "프로모션 행사를 대비한 가격 변경/기간제 할인 관리 기능
+(Admin)"을 만들어달라는 요청이었고, 본인도 "구조 변경이 필요할거 같으니 감안해서 진행해달라"고 미리
+언급했다. 실제로 Pro 월 요금은 그동안 `application.yml`의 `app.portone.pro-monthly-price-krw` 고정값
+(9900원)이라 값을 바꾸려면 재배포가 필요했고, 프로모션 개념 자체가 없었다 — 이번에 DB 기반으로 구조를
+바꿨다.
+
+**설계 결정(사용자 확인 없이 합리적 기본값으로 진행, 근거를 여기 남김)**:
+
+- **가입 시점 가격을 구독별로 잠그지 않는다.** 기존 아키텍처가 이미 매 갱신(반복 체이닝 재예약)마다
+  청구 금액을 새로 계산해 포트원에 예약하는 구조라, "현재 유효가"를 매번 다시 조회하는 쪽이 가장 단순하고
+  기존 구조와 자연스럽게 맞았다. 가격을 내리면 기존 구독자도 다음 갱신부터 혜택을 받고, 올리면 다음
+  갱신부터 새 가격이 적용된다(그레이트파더링 없음) — 별도 요구사항이 없는 한 일반적인 SaaS 가격 변경
+  방식과도 일치한다.
+- **혜택 소개는 실제로 구현된 것만.** [01] 13번 BM은 "무제한 생성/고급 분석/설계 문서 export"를 Pro
+  혜택으로 언급하지만, "고급 분석"은 실제로 별도 구현된 기능이 아니라(분석 결과물이 FREE/PRO로 갈리지
+  않음) 상품 소개 화면에서 제외했다 — 실제로 없는 혜택을 광고하지 않기 위함.
+
+**백엔드**
+
+- `subscription_pricing`(V8 마이그레이션, `free_tier_settings`와 동일한 단일 행 패턴) — `base_price_krw`,
+  `promo_price_krw`/`promo_starts_at`/`promo_ends_at`(세 컬럼은 전부 NULL 또는 전부 채워짐만 허용하는
+  CHECK 제약). 기존 `app.portone.pro-monthly-price-krw`(9900)를 초기 행으로 이관하고 그 설정 자체는
+  application.yml에서 제거했다.
+- `SubscriptionPricing` 엔티티의 `effectivePriceKrw(now)` — 프로모션 기간(`starts <= now < ends`)이면
+  프로모션가, 아니면 기본가.
+- `SubscriptionPricingService.getEffectivePriceKrw()`를 `SubscriptionService#chargeFirstPayment`/
+  `#scheduleNextPayment`, `PortOneWebhookService#rescheduleNextPayment`(웹훅의 반복 재예약 지점) 세
+  군데에 주입해, 하드코딩 `proMonthlyPriceKrw` 대신 매 청구 시점마다 유효가를 다시 조회하도록 바꿨다.
+- Admin: `SubscriptionPricingAdminController` — `GET/PUT /api/admin/subscriptions/pricing(/base-price)`,
+  `PUT/DELETE /api/admin/subscriptions/pricing/promotion`. 프로모션 종료가 시작보다 빠르면 400.
+- 회원: `SubscriptionController`에 `GET /api/subscriptions/pricing` 추가 — 상품 소개 화면 전용, 관리자
+  응답과 달리 프로모션 시작 시각 등 내부 상세는 빼고 필요한 값만 반환.
+
+**프론트엔드(Admin)** — `DashboardPage.tsx`의 "구독/사용량 대시보드"에 "Pro 구독 가격 관리" 카드를
+FREE 티어 한도 카드 옆에 추가(같은 "BM 설정" 성격이라 한 화면에 묶었다). 기본가 변경 폼과, 프로모션이
+없을 때는 가격/시작/종료(`datetime-local`) 입력 폼, 있을 때는 진행 상태 + "조기 종료" 버튼을 조건부로
+보여준다.
+
+**프론트엔드(회원)** — `/subscription` 화면의 Free 플랜 카드를 혜택 목록(체크 아이콘 + 무제한 생성/설계
+PDF 다운로드) + 가격(프로모션 중이면 기본가 취소선 + 프로모션가 강조 + 종료일, 아니면 기본가만) + "Pro
+구독하기" 버튼으로 구성된 실질적인 "상품 소개" 섹션으로 바꿨다. 별도 라우트를 새로 만들지 않고 기존
+`/subscription` 화면(계정 → "구독 보기"로 이미 도달하는 경로)을 확장하는 쪽을 택했다 — 이미 그 화면이
+Free 사용자에게 업그레이드를 유도하는 지점이었고, 라우트를 더 늘리는 것보다 그 자리를 제대로 된 소개
+화면으로 채우는 쪽이 더 단순했다.
+
+**검증**: `./gradlew compileJava`, `npx tsc --noEmit`(admin/frontend 둘 다), `npm run build`(admin),
+`oxlint`/`npx expo lint` 모두 클린. 로컬에서 3개 서버(backend/admin/frontend) 모두 기동 후 Flyway가
+V8을 정상 적용함을 로그로 확인. 임시 Admin 계정으로 API 레벨에서 기본가 변경/프로모션 설정(정상 케이스)/
+프로모션 종료가 시작보다 빠른 잘못된 요청(400 확인)/프로모션 조기 종료를 모두 검증했고, Admin 콘솔에서
+"Pro 구독 가격 관리" 카드가 프로모션 진행 중 상태를 정확히 렌더링(현재 청구가 4,900원 + "기본가 9,900원"
+안내)하고 "프로모션 조기 종료" 버튼이 실제로 동작하는 것도 Playwright로 확인했다. 프론트엔드는 임시 회원
+계정으로 `/subscription` 화면에서 혜택 목록 + 취소선 기본가/프로모션가/종료일이 스크린샷상 정상 렌더링됨을
+확인했다. 검증에 쓴 프로모션/가격 변경은 모두 원래 값(9900원, 프로모션 없음)으로 되돌려놓았고, 테스트
+계정도 모두 자체 API로 정리했다.
+
+---
+
+# Phase 19: 후속 업데이트 - 4 (앱다운 UI 개편 + 쿠폰/제재 시스템)
+
+> 서비스를 직접 써본 뒤 나온 피드백. frontend/admin이 여전히 웹처럼 보이고(앱다운 느낌 부족),
+> 홍보용 쿠폰 코드로 Pro 무료 체험을 시키는 기능과 악성 사용자 제재(BAN)/다수 사용자 Pro 일괄 지급 같은
+> CS 도구가 빠져있었다. 사용자가 "백엔드 구조 변경이 필요할 것 같으니 감안해서 진행해달라"고 먼저
+> 언급했고, 실제로 구조 변경이 필요했다(19-A 참고). 범위가 커서 4단계로 나눠 순차 진행한다.
+
+- [x] 19-A: 백엔드 구조 변경 — `pro_expires_at`(쿠폰/지급 Pro), 계정 제재, 쿠폰 도메인, Admin 회원 관리 액션
+- [x] 19-B: Admin — UI 개편 + 페이지 재구성(구독 관리/AI 프롬프트 횟수/쿠폰 신설, 대시보드 차트화, 사용자 관리 액션)
+- [x] 19-C: Frontend — Apple HIG 하단 탭바 내비게이션 셸(홈 허브/워크스페이스 분리)
+- [x] 19-D: Frontend — 화면 재배치(구독/마이페이지/쿠폰)
+
+## 작업 내용 — 19-A 백엔드 구조 변경
+
+**Pro 부여와 구독의 분리(`pro_expires_at`)**: 기존엔 `MemberPlan`이 FREE/PRO 단일 enum이라 만료 개념이
+없었고, 결제 성공/실패 웹훅과 사용자 해지 3곳이 무조건 `member.changePlan(...)`을 직접 호출했다. 쿠폰/
+관리자 지급으로 "구독과 무관하게 이 시각까지는 Pro"를 보장하려면 이 흐름이 함부로 되돌리지 못하게 막아야
+했다. `users.pro_expires_at`(V9, nullable)을 추가하고 `Member`에 3개 메서드를 얹었다: `extendProUntil(days)`
+(쿠폰/관리자 지급 공용 — FREE는 오늘부터 N일, 이미 Pro면 `max(기존 proExpiresAt, now)`부터 N일 연장),
+`syncPlanFromSubscriptionEnd()`(기존 `changePlan(FREE)` 2곳을 대체 — proExpiresAt이 아직 유효하면 FREE로
+안 내림), `clearProGrant()`(Admin 강제 Free 전환용 — 무조건 초기화). `PortOneWebhookService.handlePaid`의
+`changePlan(PRO)`는 그대로 뒀다(올리는 건 항상 안전).
+
+**첫 `@Scheduled` 잡**: `ProGrantExpirationScheduler`(시간당 1회) — `plan=PRO AND proExpiresAt < now AND
+활성 구독 없음`인 사용자만 FREE로 되돌린다(순수 쿠폰/지급만으로 Pro인 사용자). `BackendApplication`에
+`@EnableScheduling`을 처음 켰다.
+
+**즉시 제재(BAN)**: `permanent_ban`/`temp_ban_until`(V9) 두 필드로 관리. 기존 `JwtAuthenticationFilter`는
+JWT 클레임만 신뢰하고 DB를 전혀 조회하지 않아, 이미 발급된 액세스 토큰(최대 30분)은 계정을 제재해도
+계속 통하는 구조였다 — "지금 악용 중인 사용자를 막는다"는 제재의 목적 자체가 흐려지므로, 필터에 회원
+조회 1건을 추가해 매 요청마다 확인하고 즉시 403(`ACCOUNT_BANNED`)으로 거부하게 했다(이 앱 규모에서
+PK 조회 1건 추가는 성능 영향 무시 가능 수준으로 판단, 과설계 방지 차원에서 Redis 캐시는 지금 단계에서
+하지 않음). `AuthService.login`/`oauthLogin`/`refresh`도 동일하게 막아 재로그인으로 새 토큰을 받는 것도
+차단한다.
+
+**쿠폰 도메인**: 신규 `domain/coupon/` — `Coupon`(코드는 관리자가 직접 지정, 지급 일수/최대 사용
+횟수/코드 자체 기한/활성 여부), `CouponRedemption`(`UNIQUE(coupon_id, user_id)`로 동일 유저 중복 사용을
+DB 레벨에서 차단). `POST /api/coupons/redeem`(회원), `/api/admin/coupons`(코드 생성/목록/비활성화),
+`/api/admin/coupons/redemptions`(사용 현황, 코드/이메일 조인은 `PaymentAdminService`와 동일한 배치 조회
+패턴).
+
+**Admin 회원 관리 액션**: 그동안 읽기 전용이던 `MemberAdminController`에 쓰기 액션 추가 —
+`POST /api/admin/users/pro-grant`(`{userIds[], days}`, `PlanningVersionService#deleteAll`류의 "전체
+조회 → 개수 검증 → 없는 id 포함 시 통째로 400" 패턴 재사용), `POST .../{userId}/downgrade`(활성 구독이
+있으면 `SubscriptionService#cancelActiveSubscription` 재사용해 PortOne 예약도 함께 취소한 뒤 무조건
+Free 확정), `POST .../{userId}/ban`/`.../unban`.
+
+**검증**: `./gradlew compileJava` 클린. 로컬 기동 후 Flyway V9 정상 적용 확인. 임시 admin/member 계정으로
+전 구간 API 레벨 실동작 검증 — 쿠폰 생성→member redeem(Free→Pro 14일, `proExpiresAt` 정확)→중복 사용
+400, admin 쿠폰 목록/사용 현황 조회, 임시 제재→**같은 아직 유효한 access token으로 즉시 403 확인**→
+해제→같은 토큰으로 즉시 복구 확인, 영구 제재→403(다른 메시지)→해제, 잘못된 제재 요청(과거 시각) 400,
+일괄 Pro 지급(기존 `proExpiresAt`에 정확히 스택되어 연장됨 확인), 존재하지 않는 id 포함 시 일괄 지급
+전체 400, 활성 구독 없는 사용자 강제 Free 전환(플랜/proExpiresAt 초기화 확인)까지 전부 확인. 테스트
+계정/쿠폰은 모두 정리(쿠폰은 비활성화, 계정은 자체 탈퇴 API).
+
+**추가 발견 및 수정(19-B 검증 중)**: Admin UI로 "영구 정지" 버튼을 테스트 관리자 계정 자신에게 눌러본
+직후, 그 계정으로 보낸 다음 요청(같은 화면의 "정지 해제")이 즉시 403(`ACCOUNT_BANNED`)으로 거부되는
+것을 실제로 확인했다 — 제재가 이미 발급된 토큰까지 즉시 차단하도록 설계한 대로 정확히 동작한 것이지만,
+동시에 "관리자가 실수로 관리자 계정을 제재하면 앱 안에서 되돌릴 방법이 없다"는 실제 운영 위험을 그
+자리에서 드러냈다(DB 직접 접근 없이는 복구 불가 — 실제로 이 세션에서도 psql로 직접 풀어줘야 했다).
+`MemberAdminService#ban`에 대상이 `ROLE_ADMIN`이면 400으로 거부하는 가드를 추가해 이 시나리오 자체를
+막았고, 다시 검증해 정상적으로 400이 뜨는 것을 확인했다.
+
+## 작업 내용 — 19-B Admin UI 개편 + 페이지 재구성
+
+**전체 톤앤매너**: Phase 17 admin 폴리싱과 동일한 저위험 전략 — 완전 재작성 대신 기존 `index.css`
+토큰(색상/그림자/radius)은 그대로 두고, 늘어난 메뉴 항목을 다섯 그룹(현황/구독/쿠폰/콘텐츠/사용자)으로
+묶어 `Layout.tsx`의 사이드바에 그룹 헤더를 추가했다(Apple HIG의 명확한 그룹핑 원칙).
+
+**대시보드 차트화**: 차트를 그리기 전 `dataviz` 스킬을 먼저 로드해 절차를 따랐다. `recharts` 추가
+(`npm audit fix`로 전이 의존성 취약점 0건 확인). 색상은 새로 고르지 않고 이미 이 admin 앱 전역의 뱃지
+색상과 동일한 의미로 쓰이던 기존 브랜드 토큰(success/warning/danger, primary)을 그대로 재사용했다 —
+`validate_palette.js`로 검증했더니 해당 초록/주황 조합이 CVD 분리 기준(색맹 시뮬레이션 ΔE)을 단독으로는
+못 넘겼지만, 모든 차트가 막대마다 x축 카테고리명 + 값 직접 라벨을 필수로 붙이는 구조라 "색상 단독으로
+구분하지 않는다"는 보조 인코딩 요건은 이미 충족돼 있어 기존 브랜드 색을 그대로 썼다(스킬의 룰: CVD가
+6~8 미만 구간이면 보조 인코딩이 있을 때만 허용). 새 시계열 집계 API는 만들지 않고 기존 스냅샷 수치만
+막대로 시각화했다(요청 범위 판단 — 04_milestone.md 스코프 밖 항목 참고).
+
+**페이지 재구성**: `DashboardPage.tsx`는 전체 가입자/이번 달 생성(스탯 타일) + 가입자 플랜 분포/이번 달
+결제 성공·실패(차트) 4개만 남기고, 나머지는 전용 페이지로 옮겼다 — 신규 `SubscriptionManagementPage.tsx`
+("구독 관리")에 구독 상태 분포 차트(신규) + 기존 "Pro 구독 가격 관리" 카드 + 구독자 목록 테이블을 모두
+모았고(가격 관리만 옮기고 구독자 목록을 대시보드에 남기면 어중간하게 쪼개져서 "구독"이라는 주제로
+응집), 신규 `PromptQuotaPage.tsx`("AI 프롬프트 횟수")에 FREE 티어 한도 카드를 옮겼다. 신규
+`CouponsPage.tsx`(코드 생성 폼 + 목록/비활성화)와 `CouponRedemptionsPage.tsx`(사용 현황)를 "쿠폰"
+메뉴 그룹으로 묶었다.
+
+**사용자 관리 액션**: `UsersPage.tsx`에 체크박스 다중 선택 + 선택 시 나타나는 액션바("Pro 지급/연장"
+일수 입력 — 유일하게 요청에서 명시적으로 "일괄"이라 표현된 기능)를 추가했다. Free 전환/정지는 원 요청에
+"일괄"이라는 표현이 없어 개별 사용자 단위로만 지원 — `UserDetailPage.tsx`에 "회원 관리" 카드(Pro
+지급/연장, Free로 전환, 일시/영구 정지, 정지 해제)와 현재 상태(요금제/Pro 보장 만료/제재 상태) 표시를
+추가했다.
+
+**검증**: `npx tsc --noEmit`/`npm run build`/`oxlint` 모두 클린. 임시 admin 계정으로 Playwright 실동작
+검증 — 대시보드 차트(라이트/다크 모두 스크린샷, 값 라벨/축 라벨 정상 렌더링), 구독 관리 페이지(가격
+카드+구독자 목록 정상 이동), AI 프롬프트 횟수 페이지, 쿠폰 생성→목록 반영→비활성화, 유저 쿠폰 사용
+현황(과거 테스트 데이터 정상 표시, 탈퇴한 유저도 이력은 남음 확인), 사용자 목록 체크박스 선택→일괄
+Pro 지급(3일 지급 후 플랜 PRO로 변경 확인)→상세 페이지에서 Free로 전환(정상 반영)까지 확인. 위
+"추가 발견 및 수정"에 정리한 self-ban 사고와 그 수정까지 포함해 전부 확인. 테스트 계정은 자체 탈퇴
+API로 정리했다.
+
+## 작업 내용 — 19-C/19-D Frontend 내비게이션 셸 + 화면 재배치
+
+**하단 탭바 도입**: `expo-router`의 `Tabs`가 이 코드베이스에서 전혀 쓰인 적이 없어(순수 `Stack`만),
+새 `(app)/(tabs)/_layout.tsx`(Tabs, 4탭: 홈/워크스페이스/구독/마이페이지)를 기존 `(app)/_layout.tsx`
+(Stack, 그대로 유지) 안에 한 단계 중첩했다. 실제 코드 작성 전에 `frontend/AGENTS.md`의 "Expo 버전이
+바뀌었으니 버전드 문서를 꼭 확인하라"는 경고에 따라 서브에이전트로 v57 공식 문서를 직접 조회해 이 구조
+(탭 그룹의 정확매치 라우트와, 같은 이름을 공유하는 형제 폴더의 하위 라우트가 충돌 없이 공존하는지 —
+예: `(tabs)/workspaces.tsx`가 `/workspaces`, 형제 `workspaces/[id].tsx`가 `/workspaces/:id`)가 v57에서도
+그대로 지원됨을 먼저 확인한 뒤 진행했다. 탭 밖의 화면(`workspaces/new`, `workspaces/[id]`, `generating`,
+신규 `subscription/payments`, `coupon`)은 전부 바깥 Stack의 형제 라우트로 남겨 탭 안에서 눌렀을 때
+탭바 없이 전체 화면으로 푸시되는 iOS 드릴인 동작을 그대로 얻었다(실제로 Playwright로 워크스페이스 생성
+화면을 열어 탭바가 사라지고 뒤로가기 화살표 헤더로 바뀌는 것까지 확인).
+
+**신규 홈 허브**: `(tabs)/index.tsx` — 인사말 + 워크스페이스/구독 카드 2개(각각 탭으로 이동), 이후 기능이
+늘어도 카드를 더 얹기 쉬운 구조. 기존 `(app)/index.tsx`(워크스페이스 목록)는 그대로 `(tabs)/workspaces.tsx`
+로 옮겼다.
+
+**구독/마이페이지 재배치**: `subscription.tsx`에서 "이번 달 AI 생성 사용량" 섹션을 `account.tsx`
+(마이페이지)로 옮기고, "결제 내역"은 인라인 목록 대신 "결제 내역 보기" 버튼 + 별도 화면
+(`(app)/subscription/payments.tsx`)으로 분리했다. `account.tsx`에 "쿠폰 등록" 진입 행을 추가하고
+신규 `(app)/coupon.tsx`(코드 입력 → 등록, 성공 시 지급 일수/보장 만료일 표시)를 만들었다.
+
+**검증 중 발견한 실제 버그와 수정**: 쿠폰으로 Pro가 된 계정을 실제로 만들어 확인하는 과정에서, 구독
+탭과 홈 허브의 "Pro 여부" 판정이 `subscription.status`(결제 구독 상태)만 보고 있어서 **쿠폰/관리자
+지급만으로 Pro인 사용자가 구독 탭에 들어가면 여전히 "Free 플랜"에 "Pro 구독하기" 버튼이 뜨는** 실제
+버그를 발견했다 — 쿠폰이 생기기 전에는 Pro가 항상 결제 구독에서만 나와 두 신호가 같았지만, 이제는
+아니다. `member.plan`(쿠폰/지급을 포함해 항상 옳은 신호)로 교체하고, 결제 구독이 없는 Pro 사용자에게는
+"쿠폰/프로모션으로 {날짜}까지 Pro를 이용할 수 있어요" 안내를 추가로 보여주도록 고쳤다. 이를 위해
+회원용 `GET /api/auth/me`(`MemberResponse`)에 `proExpiresAt`을 새로 노출했다.
+
+이 과정에서 `member.plan`이 로그인 시점에만 채워지고 이후 쿠폰 등록/구독 시작/해지 같은 액션 후에는
+갱신되지 않는다는 것도 함께 발견했다(계정 페이지가 세션 내내 "Free"로 남아있는 문제) — `AuthContext`에
+`refreshMember()`를 추가하고 쿠폰 등록/구독 시작/해지 직후 호출하도록 배선해, 리로드 없이 마이페이지·
+구독 탭·홈 허브 전체가 즉시 갱신되는 것까지 Playwright로 확인했다.
+
+**검증**: `npx tsc --noEmit`/`npx expo lint` 클린(단, 새 라우트 추가 직후엔 expo-router의 typed routes
+선언(`.expo/types/router.d.ts`)이 갱신되지 않아 타입 에러가 났다 — `expo start`를 한 번 띄워 재생성한
+뒤 재확인). 로컬 3서버(backend/admin/frontend) 기동 후 실제 계정으로 Playwright 전체 플로우 검증 — 홈
+허브(워크스페이스 개수/구독 상태 카드), 탭 전환 4개, 워크스페이스 생성 화면 진입 시 탭바 사라짐, 구독
+탭(혜택/가격, "결제 내역 보기"→별도 화면), 마이페이지(사용량/쿠폰 진입), 쿠폰 등록(성공/중복 사용 거부/
+2번째 쿠폰으로 만료일 스택 연장 확인), 위에서 고친 "쿠폰-Pro가 구독 탭에서 정확히 표시되는지"와
+"리로드 없이 즉시 갱신되는지"까지 전부 확인. 테스트 계정/쿠폰은 정리했다.
+
+---
+
+# Phase 20: 후속 업데이트 - 5
 
 ## 작업 항목
 
-- [ ] backend를 대상으로 전체 점검
-- [ ] admin을 대상으로 전체 점검
-- [ ] frontend를 대상으로 전체 점검
-- [ ] 기능 및 비기능 점검 (보안 취약성도 추가로 점검)
+- [x] 무료인 경우 월 AI 생성횟수 제한을 1회, Pro인 경우 월 AI 생성횟수 제한을 10회로 (기획 변경)
+- [x] 유저 이름 컬럼 옵셔널로 추가해서 수정할 수 있도록 하고 로그인 시 이름 표시 (기본값은 이메일로 표기, 기획 변경)
+- [x] 유저 프로필 이미지는 임의의 시드값으로 생성된 배경색에 유저 이름의 첫글자만 따서 표시할 것 (Boring Avatars)
+- [x] frontend 앱 디자인을 구조적으로 완전 뜯어고쳐서 수정할 것 (참고 사항 : https://www.figma.com/community/file/1143575071825582037/task-management-to-do-list-app?q_id=0dec21c2-ac0a-4ffc-bff5-7ac7cae6e9de)
+
+4단계(20-A 백엔드 → 20-B Admin → 20-C Frontend 공유 프리미티브 → 20-D Frontend 화면 적용)로 진행했다.
+
+**20-A**: `free_tier_settings.monthly_limit`을 `free_monthly_limit`으로 rename하고 `pro_monthly_limit`(기본 10)을
+추가하는 V10 마이그레이션 — 기존 행을 `free_monthly_limit=1`로 UPDATE했다. `UsageQuotaService`에서 PRO 조기
+return을 제거하고 plan별로 한도를 고르도록 바꿨다(엔드포인트/DTO는 이미 있어 새로 만들 필요 없었음 — 계획
+단계에서 오래된 조사 결과로 "없다"고 잘못 판단했던 것을 재조사로 바로잡았다). `users.name`(nullable)
+추가, `Member#changeName`(빈 값은 null로 정규화), `MemberService#updateName`, `PATCH /api/auth/me` 신설 —
+`withdraw`와 동일한 컨트롤러→서비스→엔티티 패턴. `MemberResponse`/`MemberAdminResponse`에 `name` 추가.
+실동작 검증: 테스트 계정으로 FREE 한도(1회)/PRO 한도(10회, DB에서 plan만 직접 PRO로 바꿔 확인 — 코드 자체
+수정 없이 값만 바꾼 것) 모두 `GET /api/usage-quota/me`가 정확한 `limitCount`를 돌려주는지 확인, `PATCH
+/api/auth/me`로 이름 저장 후 `GET /me`에 반영되는지 확인.
+
+**20-B**: `PromptQuotaPage.tsx`를 FREE/PRO 입력 2개로 확장(`admin/src/api/settings.ts`,
+`admin/src/types/index.ts` 필드명 동기화), `UsersPage.tsx`/`UserDetailPage.tsx`에 이름 컬럼/설명 추가.
+`tsc`/`vite build` 통과 확인 — 실브라우저 검증은 시드 admin 계정(`admin@alrdream.test`) 비밀번호를 몰라
+자격증명을 바꿔야 했는데, 그 write가 샌드박스 분류기에 막혀(이전 Flyway repair 때와 동일한 종류의 차단)
+건너뛰었다.
+
+**20-C**: 새 공유 프리미티브 `IconChip`/`Avatar`/`ProgressRing`/`PillTabs`/`FabButton`을
+`frontend/src/components/ui/`에 추가하고, 기존에 화면마다 제각각이던 "컬러 칩" 패턴(`hubIcon`/`proIconWrap`/
+`EmptyState.iconWrap`)을 `IconChip` 하나로 통합했다. `theme.ts`에 `radius.pill`(999) 추가, `Button`/`Card`/
+`Field`의 기본 radius를 키워 전체적으로 더 둥글게(Button은 완전 필 형태), 하단 탭바를 여백+큰 radius+그림자로
+"떠 있는" 느낌으로 바꿨다(중앙 노치+FAB는 하지 않음 — 4탭 전체에 걸친 공통 "추가" 액션이 없어서, 대신
+워크스페이스 탭에만 `FabButton`을 둠). 실브라우저 검증(라이트/다크): 탭바가 다크에서는 배경색 대비로
+뚜렷하게 떠 보이지만 라이트에서는 bg/surface 색이 너무 비슷해 덜 두드러짐(기존 팔레트 특성, 회귀 아님).
+`shadows.lg`가 react-navigation의 `tabBarStyle`을 통해 웹에 렌더링될 때는 `box-shadow`로 변환되지 않는
+프레임워크 특성을 확인했지만, radius+margin만으로도 의도한 "떠 있는 필" 형태는 정상 동작해 추가로 파고들지
+않았다.
+
+**20-D**: 홈(인사말 옆 `Avatar`, 허브 카드 `IconChip`), 워크스페이스 목록(인라인 "+ 새 워크스페이스" 버튼 →
+우하단 `FabButton`, 목록 카드에 `IconChip`), 구독 화면(`proIconWrap`을 `IconChip`으로 교체, "AI 생성 횟수
+무제한" 문구를 "월 10회 AI 생성"으로 수정), 마이페이지(`Avatar` + 표시 이름 편집 폼 신설 — 이 화면에 "필드
+입력 후 저장" 패턴이 처음 생김, 기존 `refreshMember()` 재사용, 선형 바 → `ProgressRing`, PRO 특수 케이스
+문구 제거, 구독 관리/쿠폰 행에 `IconChip`), 워크스페이스 상세(밑줄 탭 스트립 → `PillTabs`)까지 반영.
+`tsc`/`expo lint` 통과. 실브라우저 검증(테스트 계정 가입 → 홈 아바타/인사말 → 워크스페이스 탭 FAB → 구독
+화면 카피 → 마이페이지 이름 저장(즉시 홈 인사말에도 반영되는지까지) → 회원 탈퇴로 정리)까지 전부 확인.
+`ProgressRing`에서 `react-native-svg`의 `rotation`/`origin` 편의 prop이 웹에서 `Invalid DOM property`
+콘솔 에러를 내는 걸 발견해 명시적 SVG `transform` 문자열로 교체해 고쳤다. 워크스페이스 상세의 `PillTabs`
+적용은 AI 생성 잡을 실제로 완료해야 도달하는 화면이라(비용/시간 대비 리스크가 낮은 단순 프레젠테이션
+컴포넌트라 판단) 타입체크/코드 리뷰로 갈음하고 실브라우저 검증은 하지 않았다.
+
+**Phase 20 후속 요구사항 3건**:
+
+1. 비밀번호 표시/숨기기 토글 — frontend `Field.tsx`가 `secureTextEntry`를 받으면 자동으로 눈 아이콘 토글이
+   붙도록 고쳐 기존 5개 비밀번호 필드(로그인/회원가입 2개/재설정 2개)에 콜사이트 변경 없이 전파됐다. Admin은
+   `PasswordField.tsx` 신설, `LoginPage.tsx`의 로그인/새 비밀번호 필드 2곳에 적용. 둘 다 `EyeIcon`/`EyeOffIcon`을
+   각 앱의 기존 아이콘 스타일에 맞춰 추가.
+2. 다크 모드에서 상단 바 배경이 안 맞던 문제 — frontend가 웹 빌드 시 실제 DOM `<html>` 배경을 한 번도
+   테마와 동기화한 적이 없었던 게 원인(admin/index.html엔 있던 사전 페인트 부트스트랩이 frontend엔 없었음).
+   `frontend/src/app/+html.tsx`를 신설해 admin과 같은 기준(라이트를 명시 선호하지 않으면 다크가 기본값)으로
+   하이드레이션 전에 `<html>` 배경을 미리 칠하고, `ThemeContext.tsx`에 런타임 동기화도 추가해 세션 중 테마를
+   토글해도(재로드 없이) 바로 반영되게 했다. 처음엔 스크립트가 `document.body`도 같이 칠하려다 `<head>` 스크립트
+   실행 시점엔 `<body>`가 아직 파싱 전이라 조용히 실패하는 버그가 있었음을 실브라우저 검증 중 발견해 `<html>`만
+   칠하는 것으로 고쳤다(body는 배경을 안 두면 투명해 html 배경이 그대로 비친다).
+3. 회원 탈퇴 2단계화 — 1차 본인 확인(LOCAL 계정은 현재 비밀번호를 `/api/auth/login`으로 재검증, 세션 토큰은
+   저장하지 않고 성공 여부만 확인; 소셜 로그인 계정은 비밀번호가 없어 이메일 재입력으로 대체), 2차 "탈퇴합니다"
+   문구를 정확히 입력해야 버튼이 활성화. `MemberResponse`/frontend `Member` 타입에 `provider` 필드를 추가해
+   분기 근거로 썼다.
+
+세 항목 모두 backend/frontend/admin `compileJava`/`tsc`/`lint`/`build` 통과 확인 후, 실제로 서버 3개를 띄워
+Playwright로: 비밀번호 토글(두 앱 모두 입력→가리기→토글로 평문 확인), 다크 모드 상단 배경(라이트 시스템
+기본값에서 명시적 다크 전환 후 새로고침해도 유지되는지까지), 탈퇴 2단계(틀린 비밀번호 거부 → 올바른
+비밀번호 통과 → 문구 불일치 시 비활성 버튼 → 정확한 문구 입력 후 탈퇴 성공)까지 전부 확인했다.
 
 ---
 
-# Phase XX: 문서 업데이트
+# Phase 21: 기능 및 비기능 전체 점검 - 2
+
+## 작업 항목
+
+- [x] backend를 대상으로 전체 점검
+- [x] admin을 대상으로 전체 점검
+- [x] frontend를 대상으로 전체 점검
+- [x] 기능 및 비기능 점검 (보안 취약성도 추가로 점검)
+
+## 설계 결정 — 점검 방법론
+
+- **Phase 15와 동일한 3-병렬 서브에이전트 전체 감사**: Phase 15 이후(Phase 16~20 — 비밀번호 재설정, 회원 탈퇴,
+  Admin 대시보드 통계, AI 생성 전역 폴링, 버전 비교 뷰, 쿠폰/제재 시스템, Free/Pro 이중 AI 한도, 회원 이름/
+  아바타, 구조적 리디자인, 비밀번호 토글, 다크모드 배경 버그 두 차례 수정 등)에 코드가 크게 늘어, backend/
+  admin/frontend 각각을 다른 general-purpose 에이전트에게 맡겨 병렬로 전체 재감사했다. Phase 15가 이미 검증한
+  영역(SQL 인젝션, N+1, 웹훅 서명 등)은 "재확인" 수준으로 가볍게, Phase 15 이후 신규 코드(쿠폰/제재/이중
+  한도/회원탈퇴 2단계/전역 폴링 등)는 처음 감사하는 영역이라 중점적으로 보도록 지시했다.
+- **정적 감사 후 실제 서버로 라이브 검증**: 가장 심각했던 두 건(아래 발견 1, 3)은 코드 리뷰만으로는 "정말
+  재현되는지" 확신할 수 없어, 실제 백엔드(`:8080`)+frontend(`:8081`) 웹 빌드를 띄우고 Playwright로 재현했다.
+  특히 발견 1은 "탈퇴 1차 확인만 하고 취소해도 세션이 깨지는지"를 브라우저에서 재현 후, 그 세션의 refresh
+  token을 직접 `curl`로 재사용해 실제로 갱신되는지(수정 전엔 실패, 수정 후 200) 확인했다. 발견 3도 같은
+  방식으로 access token 하나를 그대로 들고 탈퇴 전/후 같은 요청을 두 번 보내 200→403 전환을 직접 확인했다.
+- **모든 발견을 고치지는 않았다 — 판단 기준을 명시**: HIGH/MEDIUM은 전부 고쳤다. LOW 중에서도 즉시 수정
+  가능한 것(검증 누락, 접근성 라벨, NaN 가드 등)은 전부 고쳤고, 구조적으로 더 큰 리스크/스코프가 필요한
+  항목(OAuth 탈퇴 재인증 강화, 버전 목록 페이지네이션)은 Phase 15와 동일하게 "발견했지만 이번 phase에서는
+  보류" 처리하고 이유를 아래 한계에 남겼다.
+
+## 발견 및 수정 — Backend
+
+1. **[수정] 쿠폰 상환(redeem) 동시성 경쟁 — `max_redemptions` 초과 지급 가능 (MEDIUM, 동시성)** —
+   `CouponService.redeem()`이 `coupon.isRedeemableAt()`(메모리상 `redemptionCount < maxRedemptions` 비교) →
+   `member.extendProUntil()` → `coupon.incrementRedemptionCount()` 순서로 진행되는데, 잠금 장치가 전혀 없어
+   PostgreSQL 기본 격리수준(READ COMMITTED)에서 여러 사용자가 한도 근처(예: 마지막 1장)에서 거의 동시에
+   `/api/coupons/redeem`을 호출하면 각자 커밋 전 `redemptionCount`를 읽어 모두 통과 판정을 받고 각자 Pro를
+   지급받을 수 있었다(이벤트 쿠폰이 여러 사용자에게 동시에 공지되는, 이 기능의 실사용 시나리오에서 자연
+   발생 가능). `UsageQuotaService.checkAndIncrement`가 이미 쓰고 있는 `pg_advisory_xact_lock(hashtext(...))`
+   패턴을 그대로 가져와 쿠폰 코드 단위로 직렬화했다 — 락을 조회보다 먼저 걸어야 락을 기다렸다 통과한 요청이
+   반드시 직전 요청이 커밋한 최신 `redemptionCount`를 읽는다는 점이 핵심이라(락 이후에 `findByCode`를
+   호출하도록 순서를 정확히 맞췄다), 단순히 "락만 추가"하는 것보다 미묘하게 틀리기 쉬운 지점이었다.
+2. **[수정] 구독 해지(`cancelActiveSubscription`)가 Phase 15가 고친 것과 동일한 트랜잭션 경계 버그를 재발
+   (MEDIUM, 트랜잭션 경계)** — Phase 18에서 신설된 이 메서드는 되돌릴 수 없는 PortOne 외부 호출(다음 결제
+   예약 취소)과 DB 쓰기(구독 CANCELED 확정, 회원 plan 동기화)를 하나의 `@Transactional` 안에 묶고 있었다 —
+   Phase 15가 `subscribe()`에서 정확히 이 패턴을 문제 삼아 고쳤는데 그 교훈이 새 코드에 반영되지 않았다.
+   PortOne 예약 취소가 성공한 뒤 DB 반영 단계에서 예외가 나 롤백되면 "PortOne은 이미 취소했는데 DB는 여전히
+   다음 달 결제 예정"이라는 조용한 불일치가 생겨, 다음 달에 실제로는 결제가 없는데도 DB상 Pro가 계속
+   유지될 수 있었다. `subscribe()`와 동일하게 `revokeNextPaymentSchedule`(외부 호출, 트랜잭션 없음)과
+   `finalizeCancelation`(DB 반영, 별도 `@Transactional`)로 분리하고 호출부(컨트롤러)가 순서대로 호출하도록
+   했다. 이 메서드를 호출하는 `MemberAdminService.downgradeToFree`(관리자 강제 Free 전환)도 같은 이유로
+   `@Transactional(propagation = NOT_SUPPORTED)`로 클래스 기본 트랜잭션을 끊고, 마지막 Free 확정 DB 쓰기는
+   같은 빈의 자가 호출(프록시를 안 거쳐 `@Transactional`이 무시됨 — 기존에도 있던 함정)을 피하기 위해
+   `MemberService`에 새로 추가한 `clearProGrant()`(별도 빈, 별도 트랜잭션)를 호출하도록 재구성했다.
+3. **[수정] 회원 탈퇴 후에도 이미 발급된 access token이 만료 전까지(최대 30분) 계속 유효 (LOW, 인증/세션)** —
+   `withdraw()`는 refresh token만 무효화할 뿐, `JwtAuthenticationFilter`는 클레임의 서명만 검증하고 매 요청
+   회원 조회는 제재(ban) 여부만 확인했다 — 탈퇴 여부는 어디서도 재확인하지 않아, 탈퇴 직전에 발급된 access
+   token을 가진 사용자가 "탈퇴됨"으로 표시된 이후에도 남은 유효기간 동안 정상 API를 계속 쓸 수 있었다. ban
+   검사와 같은 자리에 `member.isWithdrawn()` 검사를 추가해 즉시 `403 ACCOUNT_WITHDRAWN`으로 차단하도록 했다.
+4. **[수정] 같은 쿠폰 중복 사용 동시 요청이 500으로 노출됨 (LOW, 에러 처리 일관성)** — 더블클릭 등으로 같은
+   사용자가 같은 쿠폰을 거의 동시에 두 번 요청하면(위 1번 락으로 대부분 자연스럽게 걸러지지만, 방어를
+   이중화해둠) 사전 체크(`existsByCouponIdAndUserId`)를 둘 다 통과한 뒤 DB의 `UNIQUE(coupon_id, user_id)`
+   제약에서 두 번째 요청이 `DataIntegrityViolationException`으로 실패해 catch-all 핸들러에 걸려 500이
+   노출됐다. `GlobalExceptionHandler`에 전용 핸들러를 추가해 "이미 처리된 요청입니다" 400으로 응답하도록 했다.
+5. **[수정] `CreateCouponRequest.maxRedemptions`에 하한 검증 없음 (LOW, 입력 검증)** — `@Min(1)`이 없어
+   관리자가 0/음수를 입력하면 그 즉시 "영구 사용 불가" 쿠폰이 만들어질 수 있었다(보안 결함은 아니나 Phase
+   15의 "FREE 한도가 실수로 0" 사례와 같은 클래스의 운영 사고 가능성). `@Min(1)` 추가(null은 기존대로 무제한).
+
+- **점검했지만 문제 없었던 영역**(Phase 15가 이미 검증한 영역 재확인 + 신규 영역): AI 생성 횟수 한도
+  체크-후-증가(`UsageQuotaService`)는 이미 advisory lock으로 직렬화돼 있어 이중 한도(Free/Pro) 전환 후에도
+  race condition 없음, Admin의 Free/Pro 한도 변경 API `@Min(0)` 검증 정상, `PATCH /api/auth/me`(이름 변경)
+  IDOR 불가(principal에서만 대상 결정), 회원 탈퇴 API 자체는 단순 REST라 프론트의 2단계 확인이 UX 전용
+  설계인 것은 타당함(아래 한계 참고), 사용자 제재(ban) 시스템 전반, 워크스페이스 하위 리소스 소유권 체인,
+  SQL 인젝션(전부 파라미터 바인딩/QueryDSL), 민감정보 로깅, PortOne 웹훅 서명 검증, N+1.
+
+## 발견 및 수정 — Admin
+
+1. **[수정] `CouponsPage.tsx`에 stale-response 가드 누락 (MEDIUM)** — Phase 16에서 `UsersPage`/`PaymentsPage`
+   등에 이미 적용된 "이전 요청 응답이 최신 요청 응답을 덮어쓰지 않도록" 하는 `cancelled` 플래그 패턴이 Phase
+   19에서 신설된 `CouponsPage`에는 빠져 있었다. 페이지네이션을 빠르게 넘기면 화면과 실제 페이지 번호가
+   어긋날 수 있어, 동일 패턴을 적용했다.
+2. **[수정] 쿠폰 생성 시 `maxRedemptions`/`expiresAt` 검증 누락 (MEDIUM/LOW)** — 지급 일수는 정수/1 이상을
+   엄격히 검증하면서 최대 사용 횟수는 빈 문자열이 아니면 검증 없이 그대로 API로 보냈다(음수/소수 통과 가능)
+   — Phase 15가 고친 "FREE 한도가 실수로 0" 사례와 동일 클래스의 재발. `benefitDays`와 동일한 정수/1 이상
+   검증을 추가했다. `expiresAt`(코드 사용 기한)도 과거 시각을 막지 않아 실수로 즉시 만료되는 쿠폰이 생성될
+   수 있어, 현재보다 미래인지 검증을 추가했다.
+3. **[수정] 구독 프로모션 가격 설정에서 종료 일시가 시작 일시보다 빨라도 통과됨 (LOW)** — `savePromotion()`이
+   시작/종료 값이 채워졌는지만 확인하고 순서는 검증하지 않았다. 종료가 시작보다 이후인지 확인을 추가했다.
+4. **[수정] 일시 제재 해제 시각이 과거여도 프론트에서 막지 않음 (LOW)** — 백엔드(`MemberAdminService.ban`)는
+   이미 과거 시각을 거부하지만(재확인 완료 — 아래 참고), 프론트가 API 호출 전에 먼저 걸러주지 않아 불필요한
+   왕복이 발생했다. 클라이언트 단에도 동일한 "현재보다 미래" 검증을 추가했다.
+5. **[수정] 비밀번호 재설정 코드 입력에 자릿수 검증 없음 (LOW)** — `maxLength={6}`만 있고 6자리 미만 제출을
+   막지 않아 서버 검증에 전적으로 의존했다. `pattern="\d{6}"` + 제출 시 정규식 검증을 추가했다.
+
+- **점검했지만 문제 없었던 영역**: 라우트 가드(전 신규 라우트 `ProtectedRoute`로 보호됨), 토큰 갱신/로그아웃
+  epoch 경합(Phase 15 수정 이후 변경 없음, 재발 없음), `PasswordField` 토글 버튼(`type="button"`이라 폼
+  submit 트리거 안 함), Admin 대시보드/설정 화면들의 API 실패 처리(전부 `.catch()` 있음, Phase 15가 고친
+  "조용히 무시" 패턴 재발 없음), Free/Pro 이중 한도 설정 화면 자체 검증(이미 견고), 접근성(신규/변경 화면
+  전부 `label htmlFor` 연결·`role="alert"`/`role="status"` 사용), XSS(`dangerouslySetInnerHTML` 없음),
+  하드코딩된 시크릿 없음, 벌크/개별 Pro 지급 액션 사전 검증.
+
+## 발견 및 수정 — Frontend
+
+1. **[수정] 회원탈퇴 1차 본인 확인(LOCAL)이 로그인 API를 재사용해 기존 세션을 깨뜨림 (HIGH, 보안/세션)** —
+   `account.tsx`의 `handleVerify`가 `authApi.login()`을 "성공 여부만 확인하고 새 토큰은 버린다"는 의도로
+   재사용하고 있었는데, 백엔드는 회원당 refresh token을 1개만 유지하는 구조라 이 로그인 호출 자체가 서버
+   Redis의 refresh token을 새 값으로 이미 덮어쓴 뒤였다 — 프론트가 그 새 토큰을 저장하지 않았을 뿐, 기기에
+   남아있는 "원래" refresh token은 서버에서 이미 무효화된 상태였다. 즉 탈퇴를 1차 확인만 하고 "취소"해도,
+   액세스 토큰이 만료(최대 30분)되면 자동 갱신이 조용히 실패해 강제 로그아웃됐다. 백엔드에 새 토큰을 발급
+   하지 않는 전용 엔드포인트 `POST /api/auth/me/verify-password`(`AuthService.verifyPassword`)를 추가하고
+   프론트가 이를 쓰도록 교체했다. **실제로 재현 후 수정을 검증**: 취소 전 저장해둔 refresh token을 수정 전
+   흐름(로그인 재사용)으로 시뮬레이션했다면 실패했을 것을, 수정 후에는 "확인 → 취소" 이후에도 같은 refresh
+   token으로 `curl -X POST /api/auth/refresh`가 200으로 성공함을 직접 확인했다.
+2. **[수정] 로그아웃/탈퇴/세션 만료 시 `JobPollingContext`가 정리되지 않아 계정 간 배너 누출 (HIGH, 세션 정리)** —
+   `JobPollingProvider`가 앱 전체 수명 동안 마운트돼 있는데 `logout()`/`withdraw()` 성공 경로 어디에서도
+   추적 중이던 job을 정리하지 않았다. 진행 중이던 job이 있는 상태로 로그아웃하면 다음 poll이 401로 실패해
+   `FAILED`로 남고, 같은 기기에서 곧바로 다른 계정으로 로그인하면 `JobCompletionBanner`(인증 상태와 무관하게
+   항상 렌더링)가 **이전 계정의** 배너를 새 세션에 그대로 노출하고, 탭하면 이전 계정 소유의 워크스페이스
+   경로로 이동할 수 있었다. `JobPollingProvider`가 `useAuth()`의 `status`를 구독해 `unauthenticated`로
+   전환되는 순간(로그아웃/탈퇴/refresh 실패로 인한 강제 로그아웃 전부 포함) 추적 중이던 모든 job을 정리하도록
+   했다 — `AuthContext`가 폴링을 알 필요 없게, 계층 구조(`JobPollingProvider`가 `AuthProvider` 안쪽)를
+   그대로 활용.
+3. **[수정] `JobPollingContext`가 job을 하나만 추적해 여러 워크스페이스 동시 생성 시 먼저 것을 조용히 덮어씀
+   (MEDIUM, 폴링 경합)** — `startTracking`이 전역에 job 하나만(`job` state, `trackedJobIdRef`) 추적해,
+   워크스페이스 A에서 재생성을 시작하고 완료 전에 워크스페이스 B에서도 재생성을 시작하면 B가 A의 추적을
+   경고 없이 대체했다 — A의 완료/실패를 사용자가 영영 알 수 없었다. `job` 단일 state를 `jobId`를 key로
+   하는 `Map`으로 바꿔 여러 job을 동시에 추적하도록 했다. `JobCompletionBanner`는 완료/실패한 job 중 가장
+   먼저 끝난 것부터 하나씩 보여주고 dismiss하면 다음 것이 이어서 나타나도록(스택 없이도 아무것도 유실되지
+   않도록) 했다.
+4. **[수정] `/generating` 화면이 뒤로가기/스와이프를 막아 안내 문구와 실제 동작이 모순 (MEDIUM, 네비게이션)** —
+   폴링이 전역 Provider로 옮겨진 뒤(Phase 16)에도 화면 자체는 `headerBackVisible: false`,
+   `gestureEnabled: false`로 뒤로가기를 막고 있었는데, 화면 문구는 "화면을 벗어나도 계속 진행되고, 완료되면
+   알려드려요"라고 안내해 실제 동작과 모순이었다. 폴링이 화면과 무관하게 계속되는 지금 구조에서는 막을
+   이유가 없어 두 옵션을 제거했다.
+5. **[수정] Phase 20 신규 공용 컴포넌트에 접근성 라벨/역할 전무 (MEDIUM, 접근성)** — `FabButton`(아이콘만
+   있는 Pressable, 라벨 자체가 없어 호출부가 넘길 수도 없었음), `PillTabs`(탭 전환인데 `tab`/`tablist`
+   역할·선택 상태 없음), `Field`의 비밀번호 표시/숨기기 토글(라벨 없음) — 저장소 전체에서 접근성 속성이
+   쓰인 곳이 `ThemeMenuButton` 한 곳뿐이었다. 세 컴포넌트 모두 `accessibilityLabel`/`accessibilityRole`/
+   `accessibilityState`를 추가했다(`FabButton`은 호출부가 필수로 넘기도록 타입도 강제).
+6. **[수정] `ProgressRing`이 `NaN` progress를 방어하지 않음 (LOW)** — 현재 유일한 호출부(`account.tsx`)는
+   분모 0을 이미 막고 있어 실사용에서는 안전했지만, 컴포넌트 자체엔 방어가 없어 재사용 시 위험했다.
+   `Number.isFinite` 체크를 추가해 컴포넌트 차원에서도 안전하게 했다.
+7. **[수정] `forgot-password.tsx`가 `router.push`를 써 코드 재요청 반복 시 스택이 계속 쌓임 (LOW)** —
+   Phase 15가 고친 것과 같은 클래스의 사소한 패턴. `router.replace`로 교체.
+
+- **점검했지만 문제 없었던 영역**: 토큰 갱신 후 재시도 401 처리(Phase 15 수정 유지), Google OAuth nonce
+  검증(Phase 15 수정 유지), 재생성 화면 이동은 전부 `router.replace`(Phase 15 수정 유지, 신규 버전 비교
+  화면도 동일 패턴 준수), OAuth 계정의 탈퇴 1차 확인이 "화면에 이미 보이는 이메일 재입력"이라 실질적
+  보안 장벽은 아니지만 이는 백엔드가 애초에 bearer 토큰 외 추가 인증을 요구하지 않는 stateless REST API
+  설계의 근본적 한계라 이번 phase 스코프에서는 UX 확인 절차로만 두기로 함(아래 한계 참고), `AppShell`의
+  `navigationTheme`(직전 세션에서 신설) `useMemo` 의존성 정상 — 회귀 없음, 새 공유 컴포넌트들의 필수 prop
+  누락 크래시 가능성 없음, 하드코딩된 시크릿/민감정보 로깅 없음.
+
+## 테스트 결과
+
+- **정적 검증**: 수정 완료 후 `backend`(`./gradlew compileJava`), `admin`(`npx tsc --noEmit`, `npm run
+build`), `frontend`(`npx tsc --noEmit`, `npx expo lint`) 전부 에러 없이 통과.
+- **라이브 검증 1 — 탈퇴 1차 확인 취소 후 세션 유지**(실제 `:8080`+`:8081` 웹 빌드): 신규 계정으로 가입 →
+  마이페이지 → 회원 탈퇴 → 비밀번호로 1차 확인(네트워크 탭에서 `POST /api/auth/me/verify-password` 204 호출
+  확인, `/api/auth/login` 아님) → 취소. 그 시점의 refresh token을 그대로 `curl -X POST
+http://localhost:8080/api/auth/refresh`로 재사용해 200과 새 토큰 쌍을 정상 발급받음을 확인 — 수정 전이었다면
+  이 refresh token은 이미 서버에서 무효화돼 실패했을 것.
+- **라이브 검증 2 — 탈퇴 즉시 토큰 무효화**: 위에서 받은 access token으로 `GET /api/auth/me` 200 확인 →
+  같은 토큰으로 `DELETE /api/auth/me` 호출해 실제 탈퇴(204) → 만료되지 않은 **같은** access token으로 다시
+  `GET /api/auth/me` 호출 시 `403 ACCOUNT_WITHDRAWN`으로 즉시 차단됨을 확인(수정 전이었다면 200으로 계속
+  통과했을 것).
+- **비밀번호 표시/숨기기 접근성 라벨**: Playwright 접근성 스냅샷으로 회원가입 화면의 두 토글 버튼이
+  `button "비밀번호 표시"`로 올바르게 노출됨을 확인.
+- 이 phase에서 만든 테스트 계정은 위 검증 과정에서 그대로 탈퇴 처리했고, 두 서버 모두 종료했다.
+
+## 한계
+
+- **OAuth 계정의 회원탈퇴 1차 확인은 실질적 인증이 아니라 실수 방지용 UX 확인**: LOCAL 계정은 비밀번호
+  재확인으로 실제 인증이 되지만, OAuth 계정은 화면에 이미 보이는 이메일을 다시 입력하는 것뿐이라 탈취된
+  access token만으로도 통과된다. 다만 백엔드의 `DELETE /api/auth/me` 자체가 bearer 토큰 인증만 요구하는
+  stateless REST API라(쿠키 미사용, CSRF 우려 없음) 애초에 프론트의 확인 절차 유무와 무관하게 유효한 access
+  token 하나면 탈퇴가 가능한 구조다 — 진짜 재인증을 하려면 Google/Apple 로그인 팝업을 다시 띄워야 하는데,
+  이는 이번 phase보다 훨씬 큰 스코프(OAuth 재인증 플로우 신설)라 보류하고 한계로 남긴다.
+- **쿠폰 동시성 수정은 실제 동시 요청 타이밍으로 재현 검증하지 못함**: `pg_advisory_xact_lock` 패턴 자체는
+  이미 `UsageQuotaService`에서 검증된 방식을 그대로 재사용했지만(코드 대칭성으로 정확성 확보), 여러 프로세스가
+  정확히 같은 순간에 요청을 보내는 레이스 컨디션은 `curl` 스크립트로 안정적으로 재현하기 어려워 코드 리뷰
+  수준에 머물렀다.
+- **Admin 신규 검증 로직(CouponsPage/SubscriptionManagementPage/UserDetailPage)은 관리자 계정 없이 정적
+  검증(`tsc`/`build`)까지만 진행**: 이전 phase들과 동일한 기존 한계(시드 관리자 계정 자격 증명을 모름, DB
+  직접 UPDATE는 샌드박스 정책상 시도하지 않음)가 이번에도 반복됐다.
+- **워크스페이스별 동시 생성(여러 job 동시 추적) 수정은 실제 AI 생성 파이프라인을 두 번 동시에 트리거해
+  검증하지 못함**: Claude API 호출이 실제로 들어가는 비용/시간 문제로 Phase 17 등 이전 phase에서도 반복된
+  결정과 동일하게 코드 리뷰 수준에 머물렀다.
+
+---
+
+# Phase 22: 문서 업데이트
 
 ## 작업 항목
 
 - [ ] README.md에 누락사항 확인 후 업데이트
 - [ ] docs 디렉토리에 구현한 스키마 관련 md 확장자 문서 작성
-- [ ] docs 디렉토리에 구현한 사항 PPT 발표용으로 정리하여 md 확장자 문서 작성 (주요 기능 사용 예시도 캡쳐해서 이미지로 저장할 것)
+- [ ] docs 디렉토리에 구현한 사항 PPT 발표용으로 정리하여 md 확장자 문서 작성 (주요 기능 사용 예시도 캡쳐해서 이미지도 저장할 것)
 
 ---
 

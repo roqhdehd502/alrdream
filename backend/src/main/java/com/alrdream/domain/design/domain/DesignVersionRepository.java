@@ -11,6 +11,9 @@ public interface DesignVersionRepository extends JpaRepository<DesignVersion, UU
 
 	Optional<DesignVersion> findByIdAndAnalysisVersionIdAndDeletedAtIsNull(UUID id, UUID analysisVersionId);
 
+	// [03] §5 — 자신 또는 상위(분석/기획)가 소프트 삭제돼도 조회는 허용해야 하는 읽기 경로용(deletedAt 무시).
+	Optional<DesignVersion> findByIdAndAnalysisVersionId(UUID id, UUID analysisVersionId);
+
 	List<DesignVersion> findAllByAnalysisVersionIdAndDeletedAtIsNullOrderByVersionNoDesc(UUID analysisVersionId);
 
 	Page<DesignVersion> findAllByAnalysisVersionIdAndDeletedAtIsNull(UUID analysisVersionId, Pageable pageable);

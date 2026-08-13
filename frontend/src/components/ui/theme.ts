@@ -51,6 +51,15 @@ export const radius = {
   sm: 8,
   md: 12,
   lg: 18,
+  pill: 999,
+};
+
+// RN 그림자는 CSS box-shadow와 달리 라이트/다크 공통으로 검정 기반이 자연스럽다(admin의 --shadow-*와 달리
+// 테마별로 opacity를 나눌 필요가 없음) — Card/Button 등 공용 프리미티브가 공유하는 3단계 티어.
+export const shadows = {
+  sm: { shadowColor: "#000", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.08, shadowRadius: 3, elevation: 2 },
+  md: { shadowColor: "#000", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.12, shadowRadius: 10, elevation: 5 },
+  lg: { shadowColor: "#000", shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.18, shadowRadius: 14, elevation: 6 },
 };
 
 export const fontFamily = {

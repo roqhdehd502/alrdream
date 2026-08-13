@@ -72,7 +72,7 @@ function QuestionEditor({
   const idPrefix = `q-${index}`;
 
   return (
-    <div className="card" style={{ marginBottom: 12 }}>
+    <div className="card card--nested" style={{ marginBottom: 12 }}>
       <div className="form-row">
         <div className="form-field">
           <label htmlFor={`${idPrefix}-id`}>문항 ID</label>
@@ -320,8 +320,8 @@ export function SurveyDefinitionsPage() {
         </div>
       ) : preview ? (
         <div className="card">
-          <div className="toolbar" style={{ justifyContent: "space-between" }}>
-            <h3 style={{ margin: 0 }}>
+          <div className="card-header">
+            <h3>
               v{preview.version} — {preview.title}
             </h3>
             <button type="button" className="btn" onClick={() => setPreview(null)}>

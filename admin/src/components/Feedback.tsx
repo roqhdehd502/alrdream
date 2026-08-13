@@ -1,3 +1,6 @@
+import type { ReactNode } from "react";
+import { InboxIcon } from "./icons";
+
 export function Loading({ label = "불러오는 중..." }: { label?: string }) {
   return (
     <div className="loading-row">
@@ -7,8 +10,13 @@ export function Loading({ label = "불러오는 중..." }: { label?: string }) {
   );
 }
 
-export function EmptyState({ label }: { label: string }) {
-  return <div className="empty-state">{label}</div>;
+export function EmptyState({ label, icon }: { label: string; icon?: ReactNode }) {
+  return (
+    <div className="empty-state">
+      <span className="empty-state-icon">{icon ?? <InboxIcon size={20} />}</span>
+      {label}
+    </div>
+  );
 }
 
 export function ErrorAlert({ message }: { message: string | null }) {

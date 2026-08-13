@@ -1,12 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Pressable, Text, View } from "react-native";
 import { useLocalSearchParams, useNavigation } from "expo-router";
 import { workspacesApi } from "../../../../api/workspaces";
 import { planningApi } from "../../../../api/planning";
 import { ApiError } from "../../../../api/client";
 import { ScreenContainer } from "../../../../components/ui/ScreenContainer";
 import { Loading, ErrorBanner } from "../../../../components/ui/Feedback";
-import { useTheme, useThemedStyles } from "../../../../components/ui/ThemeContext";
+import { PillTabs } from "../../../../components/ui/PillTabs";
 import { PlanningTab } from "../../../../components/workspace/PlanningTab";
 import { AnalysisTab } from "../../../../components/workspace/AnalysisTab";
 import { DesignTab } from "../../../../components/workspace/DesignTab";
@@ -23,16 +22,12 @@ const TABS: { key: TabKey; label: string }[] = [
 ];
 
 export default function WorkspaceDetailScreen() {
-  const { id, tab: initialTab } = useLocalSearchParams<{ id: string; tab?: TabKey }>();
+  const { id, tab: initialTab, analysisVersionId } = useLocalSearchParams<{
+    id: string;
+    tab?: TabKey;
+    analysisVersionId?: string;
+  }>();
   const navigation = useNavigation();
-  const { typography } = useTheme();
-  const styles = useThemedStyles((colors) => ({
-    tabs: { flexDirection: "row" as const, gap: 20, borderBottomWidth: 1, borderBottomColor: colors.border },
-    tabButton: { paddingBottom: 10, gap: 8 },
-    tabActive: { color: colors.primary },
-    tabInactive: { color: colors.textMuted },
-    tabUnderline: { height: 2, backgroundColor: colors.primary, borderRadius: 1 },
-  }));
   const [workspace, setWorkspace] = useState<Workspace | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState<TabKey>((initialTab as TabKey) ?? "planning");
@@ -95,14 +90,7 @@ export default function WorkspaceDetailScreen() {
 
   return (
     <ScreenContainer>
-      <View style={styles.tabs}>
-        {TABS.map((t) => (
-          <Pressable key={t.key} onPress={() => setTab(t.key)} style={styles.tabButton}>
-            <Text style={[typography.label, tab === t.key ? styles.tabActive : styles.tabInactive]}>{t.label}</Text>
-            {tab === t.key ? <View style={styles.tabUnderline} /> : null}
-          </Pressable>
-        ))}
-      </View>
+      <PillTabs items={TABS} value={tab} onChange={setTab} style={{ marginBottom: 16 }} />
 
       {tab === "planning" && (
         <PlanningTab
@@ -114,7 +102,13 @@ export default function WorkspaceDetailScreen() {
         />
       )}
       {tab === "analysis" && <AnalysisTab workspaceId={id} planningVersionId={latestCompletedPlanningId} />}
-      {tab === "design" && <DesignTab workspaceId={id} planningVersionId={latestCompletedPlanningId} />}
+      {tab === "design" && (
+        <DesignTab
+          workspaceId={id}
+          planningVersionId={latestCompletedPlanningId}
+          preferredAnalysisVersionId={analysisVersionId ?? null}
+        />
+      )}
       {tab === "settings" && <SettingsTab workspace={workspace} onRenamed={setWorkspace} />}
     </ScreenContainer>
   );

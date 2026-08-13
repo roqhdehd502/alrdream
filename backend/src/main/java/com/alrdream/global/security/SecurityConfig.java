@@ -1,5 +1,6 @@
 package com.alrdream.global.security;
 
+import com.alrdream.domain.member.domain.MemberRepository;
 import com.alrdream.global.error.ErrorResponse;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.HttpServletResponse;
@@ -54,7 +55,8 @@ public class SecurityConfig {
 	}
 
 	@Bean
-	public SecurityFilterChain securityFilterChain(HttpSecurity http, JwtTokenProvider jwtTokenProvider) throws Exception {
+	public SecurityFilterChain securityFilterChain(
+			HttpSecurity http, JwtTokenProvider jwtTokenProvider, MemberRepository memberRepository) throws Exception {
 		http.csrf(csrf -> csrf.disable())
 				.cors(cors -> {})
 				.httpBasic(basic -> basic.disable())
@@ -82,7 +84,9 @@ public class SecurityConfig {
 								writeError(response, 401, "UNAUTHORIZED", "인증이 필요합니다."))
 						.accessDeniedHandler((request, response, accessDeniedException) ->
 								writeError(response, 403, "FORBIDDEN", "접근 권한이 없습니다.")))
-				.addFilterBefore(new JwtAuthenticationFilter(jwtTokenProvider), UsernamePasswordAuthenticationFilter.class);
+				.addFilterBefore(
+						new JwtAuthenticationFilter(jwtTokenProvider, memberRepository),
+						UsernamePasswordAuthenticationFilter.class);
 		return http.build();
 	}
 

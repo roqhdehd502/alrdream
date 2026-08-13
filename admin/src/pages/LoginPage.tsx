@@ -5,6 +5,7 @@ import { authApi } from "../api/auth";
 import { ApiError } from "../api/client";
 import { getTheme, toggleTheme } from "../theme";
 import { MoonIcon, SunIcon } from "../components/icons";
+import { PasswordField } from "../components/PasswordField";
 
 type Mode = "login" | "reset-request" | "reset-confirm";
 
@@ -60,6 +61,10 @@ export function LoginPage() {
   const handleConfirmReset = async (e: FormEvent) => {
     e.preventDefault();
     resetMessages();
+    if (!/^\d{6}$/.test(code)) {
+      setError("6자리 숫자 코드를 입력해주세요.");
+      return;
+    }
     setSubmitting(true);
     try {
       await authApi.confirmPasswordReset(email, code, newPassword);
@@ -105,24 +110,21 @@ export function LoginPage() {
                   autoFocus
                 />
               </div>
-              <div className="form-field">
-                <label htmlFor="password">비밀번호</label>
-                <input
-                  id="password"
-                  type="password"
-                  autoComplete="current-password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
-                />
-              </div>
+              <PasswordField
+                id="password"
+                label="비밀번호"
+                autoComplete="current-password"
+                value={password}
+                onChange={setPassword}
+                required
+              />
               {error && (
                 <div className="alert alert-error" role="alert">
                   {error}
                 </div>
               )}
               {info && <div className="alert alert-success">{info}</div>}
-              <button type="submit" className="btn btn-primary" style={{ width: "100%" }} disabled={submitting}>
+              <button type="submit" className="btn btn-primary btn-block" disabled={submitting}>
                 {submitting ? "로그인 중..." : "로그인"}
               </button>
             </form>
@@ -160,7 +162,7 @@ export function LoginPage() {
                   {error}
                 </div>
               )}
-              <button type="submit" className="btn btn-primary" style={{ width: "100%" }} disabled={submitting}>
+              <button type="submit" className="btn btn-primary btn-block" disabled={submitting}>
                 {submitting ? "요청 중..." : "재설정 코드 받기"}
               </button>
             </form>
@@ -180,6 +182,7 @@ export function LoginPage() {
                   id="reset-code"
                   type="text"
                   inputMode="numeric"
+                  pattern="\d{6}"
                   maxLength={6}
                   value={code}
                   onChange={(e) => setCode(e.target.value)}
@@ -187,24 +190,21 @@ export function LoginPage() {
                   autoFocus
                 />
               </div>
-              <div className="form-field">
-                <label htmlFor="new-password">새 비밀번호 (8자 이상)</label>
-                <input
-                  id="new-password"
-                  type="password"
-                  autoComplete="new-password"
-                  value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
-                  required
-                  minLength={8}
-                />
-              </div>
+              <PasswordField
+                id="new-password"
+                label="새 비밀번호 (8자 이상)"
+                autoComplete="new-password"
+                value={newPassword}
+                onChange={setNewPassword}
+                required
+                minLength={8}
+              />
               {error && (
                 <div className="alert alert-error" role="alert">
                   {error}
                 </div>
               )}
-              <button type="submit" className="btn btn-primary" style={{ width: "100%" }} disabled={submitting}>
+              <button type="submit" className="btn btn-primary btn-block" disabled={submitting}>
                 {submitting ? "재설정 중..." : "비밀번호 재설정"}
               </button>
             </form>

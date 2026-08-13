@@ -4,5 +4,6 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Min;
 
 public record UpdateFreeTierLimitRequest(
-		@Schema(description = "새 FREE 플랜 월별 생성 횟수 한도") @Min(0) int monthlyLimit) {
+		@Schema(description = "새 FREE 플랜 월별 생성 횟수 한도") @Min(0) int freeMonthlyLimit,
+		@Schema(description = "새 PRO 플랜 월별 생성 횟수 한도") @Min(0) int proMonthlyLimit) {
 }

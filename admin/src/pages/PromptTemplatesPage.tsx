@@ -164,8 +164,8 @@ export function PromptTemplatesPage() {
         </div>
       ) : preview ? (
         <div className="card">
-          <div className="toolbar" style={{ justifyContent: "space-between" }}>
-            <h3 style={{ margin: 0 }}>
+          <div className="card-header">
+            <h3>
               v{preview.version} — {preview.toolName}
             </h3>
             <button type="button" className="btn" onClick={() => setPreview(null)}>

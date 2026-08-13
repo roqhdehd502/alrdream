@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Modal, Pressable, StyleProp, StyleSheet, Text, View, ViewStyle } from "react-native";
 import { useTheme, useThemedStyles, type ThemePreference } from "./ThemeContext";
-import { fontFamily, radius } from "./theme";
+import { fontFamily, radius, shadows } from "./theme";
 import { MoonIcon, SunIcon } from "./icons";
 
 const OPTIONS: { key: ThemePreference; label: string }[] = [
@@ -35,11 +35,7 @@ export function ThemeMenuButton({ style }: { style?: StyleProp<ViewStyle> }) {
       borderRadius: radius.sm,
       paddingVertical: 6,
       minWidth: 148,
-      shadowColor: "#000",
-      shadowOpacity: 0.18,
-      shadowRadius: 14,
-      shadowOffset: { width: 0, height: 6 },
-      elevation: 6,
+      ...shadows.lg,
     },
     option: { paddingVertical: 10, paddingHorizontal: 14 },
     optionLabel: { fontSize: 13.5, fontFamily: fontFamily.medium, color: colors.textMuted },

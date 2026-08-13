@@ -1,5 +1,7 @@
 package com.alrdream.domain.member.domain;
 
+import java.time.OffsetDateTime;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
@@ -19,4 +21,7 @@ public interface MemberRepository extends JpaRepository<Member, UUID> {
 
 	/** Phase 16 — Admin 대시보드 통계. */
 	long countByPlan(MemberPlan plan);
+
+	/** Phase 19 — ProGrantExpirationScheduler가 쿠폰/관리자 지급 Pro 만료 후보를 찾을 때 쓴다. */
+	List<Member> findAllByPlanAndProExpiresAtBefore(MemberPlan plan, OffsetDateTime time);
 }

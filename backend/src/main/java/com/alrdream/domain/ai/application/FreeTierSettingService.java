@@ -29,9 +29,10 @@ public class FreeTierSettingService {
 	}
 
 	@Transactional
-	public FreeTierSetting updateMonthlyLimit(int monthlyLimit) {
+	public FreeTierSetting updateLimits(int freeMonthlyLimit, int proMonthlyLimit) {
 		FreeTierSetting setting = get();
-		setting.changeMonthlyLimit(monthlyLimit);
+		setting.changeFreeMonthlyLimit(freeMonthlyLimit);
+		setting.changeProMonthlyLimit(proMonthlyLimit);
 		return setting;
 	}
 }

@@ -52,6 +52,10 @@ public class Subscription extends BaseEntity {
 	@Column(name = "next_billing_at")
 	private OffsetDateTime nextBillingAt;
 
+	/** PortOne에 등록된 마지막 결제 예약(paymentSchedule) ID — 해지 시 이 값으로 PortOne 예약을 취소한다. */
+	@Column(name = "next_payment_schedule_id")
+	private String nextPaymentScheduleId;
+
 	@Column(name = "started_at", nullable = false)
 	private OffsetDateTime startedAt;
 
@@ -70,8 +74,9 @@ public class Subscription extends BaseEntity {
 		return new Subscription(userId, billingKey);
 	}
 
-	public void scheduleNextBilling(OffsetDateTime nextBillingAt) {
+	public void scheduleNextBilling(OffsetDateTime nextBillingAt, String scheduleId) {
 		this.nextBillingAt = nextBillingAt;
+		this.nextPaymentScheduleId = scheduleId;
 	}
 
 	/** {@code Transaction.Paid} 웹훅 수신 시 호출 — 결제가 실제로 승인됐음을 반영한다. */
@@ -88,5 +93,8 @@ public class Subscription extends BaseEntity {
 	/** 최초 결제 요청 자체가 실패했을 때(카드사 거절 등, 돈이 실제로 오가지 않음) 호출 — 재구독 시도를 막지 않도록 정리한다. */
 	public void cancel() {
 		this.status = SubscriptionStatus.CANCELED;
+		this.expiresAt = OffsetDateTime.now();
+		this.nextBillingAt = null;
+		this.nextPaymentScheduleId = null;
 	}
 }

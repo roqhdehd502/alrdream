@@ -2,13 +2,14 @@ import { Pressable, Text, View } from "react-native";
 import { usePathname, useRouter, type Href } from "expo-router";
 import { useJobPolling } from "./JobPollingContext";
 import { useTheme, useThemedStyles } from "../ui/ThemeContext";
+import { shadows } from "../ui/theme";
 
 /**
  * Phase 16 — 생성 화면(/generating)을 벗어난 뒤 작업이 완료/실패됐을 때 전역으로 보여주는 배너.
  * /generating 화면 자체는 같은 정보를 이미 화면 전체로 보여주므로 거기서는 중복 노출하지 않는다.
  */
 export function JobCompletionBanner() {
-  const { job, dismiss } = useJobPolling();
+  const { jobs, dismiss } = useJobPolling();
   const router = useRouter();
   const pathname = usePathname();
   const { colors, typography } = useTheme();
@@ -26,18 +27,17 @@ export function JobCompletionBanner() {
       backgroundColor: colors.surface,
       borderWidth: 1,
       borderColor: colors.border,
-      shadowColor: "#000",
-      shadowOpacity: 0.15,
-      shadowRadius: 10,
-      shadowOffset: { width: 0, height: 4 },
-      elevation: 6,
+      ...shadows.md,
     },
     text: { flex: 1 },
     closeButton: { padding: 4 },
   }));
 
+  // 여러 워크스페이스에서 동시에 완료/실패한 job이 있을 수 있다 — 가장 먼저 끝난 것부터 하나씩 보여주고,
+  // 닫거나 확인하면(dismiss) 다음 job의 배너가 이어서 나타난다(Phase 21 전수 점검 — 예전엔 job을 하나만
+  // 추적해 나중 job이 먼저 것을 조용히 덮어썼다).
+  const job = jobs.find((j) => j.status === "COMPLETED" || j.status === "FAILED");
   if (!job || pathname === "/generating") return null;
-  if (job.status !== "COMPLETED" && job.status !== "FAILED") return null;
 
   const message = job.status === "COMPLETED" ? "생성이 완료됐어요 · 확인하기" : "생성에 실패했어요 · 확인하기";
 
@@ -47,13 +47,13 @@ export function JobCompletionBanner() {
         style={styles.text}
         onPress={() => {
           const redirectTo = job.redirectTo;
-          dismiss();
+          dismiss(job.jobId);
           router.push((redirectTo ?? "/") as Href);
         }}
       >
         <Text style={typography.body}>{message}</Text>
       </Pressable>
-      <Pressable style={styles.closeButton} onPress={dismiss} hitSlop={10}>
+      <Pressable style={styles.closeButton} onPress={() => dismiss(job.jobId)} hitSlop={10}>
         <Text style={{ color: colors.textMuted, fontSize: 16 }}>×</Text>
       </Pressable>
     </View>

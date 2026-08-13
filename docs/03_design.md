@@ -29,14 +29,17 @@
 
 ## 2-1. 목적
 
-Admin은 아래 4가지를 관리한다. 특히 설문 정의 관리는 [02] 문서에서 정의한 "배포 없이 버전만 올려 문항을 교체"할 수 있어야 한다는 요구를 실제로 충족시키는 화면이다.
+Admin은 아래 항목을 관리한다. 특히 설문 정의 관리는 [02] 문서에서 정의한 "배포 없이 버전만 올려 문항을 교체"할 수 있어야 한다는 요구를 실제로 충족시키는 화면이다.
 
-| 영역                     | 기능                                                        |
-| ------------------------ | ----------------------------------------------------------- |
-| 설문 정의 관리           | `survey_definitions` CRUD, 새 버전 발행, 미리보기           |
-| 사용자/워크스페이스 조회 | CS 대응용 조회, 상태 확인 (수정/삭제 등 직접 개입은 최소화) |
-| AI 프롬프트 템플릿 관리  | `promptKey` → 프롬프트 템플릿 매핑 편집, 버전 관리          |
-| 구독/사용량 관리         | Pro 구독 현황, Free 티어 생성 횟수 한도 조정 ([01] 13번 BM) |
+| 영역                     | 기능                                                                                                                                                                                                  |
+| ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 설문 정의 관리           | `survey_definitions` CRUD, 새 버전 발행, 미리보기                                                                                                                                                     |
+| 사용자/워크스페이스 조회 | CS 대응용 조회, 상태 확인. Phase 19부터 Pro 일괄 지급/연장, 강제 Free 전환, 계정 제재(일시/영구) 액션 추가 — `ROLE_ADMIN` 대상은 실수로 관리자 콘솔 전체가 잠기는 사고를 막기 위해 제재 대상에서 제외 |
+| AI 프롬프트 템플릿 관리  | `promptKey` → 프롬프트 템플릿 매핑 편집, 버전 관리                                                                                                                                                    |
+| 구독 관리                | Pro 구독 현황(목록/상태별 분포 차트), 가격/프로모션 설정([01] 13번 BM) — "구독 관리" 페이지                                                                                                           |
+| AI 프롬프트 횟수 관리    | FREE 티어 월별 생성 횟수 한도 조정 — 별도 페이지                                                                                                                                                      |
+| 쿠폰 관리(Phase 19)      | 쿠폰 코드 생성/비활성화, 유저별 사용 현황 조회                                                                                                                                                        |
+| 대시보드                 | 가입자/생성량/결제 현황 요약(스탯 타일 + 막대 차트)                                                                                                                                                   |
 
 ## 2-2. 기술 스택 및 구조
 
@@ -76,6 +79,13 @@ admin/
 ```
 
 - "AI 생성 대기 화면"이 필요한 이유: 기획/분석/설계 생성은 LLM 호출 + PDF 렌더링이 포함돼 수 초~수십 초가 걸릴 수 있음 → 동기 응답 대신 작업(Job) 상태를 폴링하는 UX가 필요 (§4-4)
+
+**내비게이션 구조(Phase 19)**: 앱다운 느낌을 위해 Apple HIG 스타일 하단 탭바(`expo-router`의 `Tabs`)를
+도입했다 — 홈(허브, 향후 기능 추가를 대비해 카드 목록으로 구성)/워크스페이스/구독/마이페이지 4탭.
+`(app)/(tabs)/` 그룹으로 묶고, 워크스페이스 상세·생성·결제 내역·쿠폰 등록처럼 깊이 들어가는 화면은
+탭 그룹 밖의 형제 라우트로 둬 눌렀을 때 탭바 없이 전체 화면으로 푸시되는 iOS 드릴인 동작을 그대로
+가져간다. 마이페이지에 "이번 달 AI 생성 사용량"(예전엔 구독 화면에 있었음)과 쿠폰 등록 진입점을,
+구독 화면에는 "결제 내역 보기"로 분리된 별도 화면을 연결했다.
 
 ## 3-2. 크로스플랫폼 전략 (제안)
 
@@ -225,7 +235,54 @@ PG사는 **토스페이먼츠(신모듈)**, 결제 게이트웨이는 **포트�
 - **빌링키 발급은 프론트/Admin에서 SDK로 처리**한다 (API 방식 대비 카드정보를 백엔드가 직접 다루지 않아 PCI-DSS 부담이 적음)
 - **정기결제는 포트원이 서버에서 자동 실행**한다 — 결제 시각(`timeToPay`)을 예약해두면 그 시각에 포트원이 결제를 시도하고, 우리 백엔드는 결과를 웹훅으로만 수신. 반복결제는 매 결제 완료 웹훅을 받을 때마다 "다음 결제"를 다시 예약하는 체이닝으로 구현 (별도 크론/스케줄러 불필요)
 - **웹훅**(`POST /webhooks/portone`)은 PortOne JVM Server SDK로 Standard Webhooks 서명을 검증한 뒤 처리. 주요 이벤트: `BillingKey.Issued/Failed`, `Transaction.Paid/Failed/Cancelled`. 포트원이 실패 시 최대 5회 지수 백오프로 재전송하므로, 웹훅 핸들러는 `payment_id` 기준으로 **멱등하게** 처리한다 (중복 수신 대비)
+- **Frontend 사용자 API** (`/api/subscriptions/*`, Phase 18 후속 — 최초 구현 시 Admin 전용 조회만 있고 사용자 앱에는 아무 화면이 없던 것을 뒤늦게 보완):
+  - `POST /api/subscriptions` — 빌링키로 구독 시작(§ 상단 플로우)
+  - `GET /api/subscriptions/me` — 내 구독 상태/다음 결제일 조회. 한 번도 구독한 적 없으면 400
+  - `DELETE /api/subscriptions/me` — 구독 해지. **PortOne에 이미 등록된 다음 달 결제 예약(paymentSchedule)을 `revokePaymentSchedules`로 먼저 취소**한 뒤 DB를 CANCELED로 반영한다 — 이 순서가 아니면 DB만 취소되고 포트원은 예정대로 결제를 진행해버린다. 그래서 `subscriptions.next_payment_schedule_id`(V7 마이그레이션)에 마지막으로 등록한 예약 ID를 항상 저장해둔다(최초 구독 시점과, 웹훅의 반복 체이닝 재예약 시점 둘 다). 해지는 즉시 발효되며 남은 기간 일할 환불은 없다(이번 phase 스코프 밖)
+  - `GET /api/subscriptions/me/payments` — 내 결제 내역(해지 후 재구독으로 여러 구독 이력이 있어도 전체 통합 조회)
+  - `GET /api/usage-quota/me` — 이번 달 AI 생성 사용량/한도 조회(429를 맞기 전에 잔여 횟수를 미리 확인). `ai` 도메인 소속이라 별도 `UsageQuotaController`
+- **Frontend 빌링키 발급**은 `@portone/browser-sdk`(`requestIssueBillingKey`, v2)로 처리하며, `storeId`/`channelKey`는 브라우저 노출을 전제로 한 공개 식별자라 `EXPO_PUBLIC_PORTONE_STORE_ID`/`EXPO_PUBLIC_PORTONE_CHANNEL_KEY`로 둔다(API 시크릿/웹훅 시크릿과 달리 비밀값이 아님). 이 SDK는 브라우저 전용이라 **웹 빌드에서만 지원**하고(§4-5 Google 로그인과 동일한 이유 — 동적 import로 감싸 네이티브 번들에 영향 없게 함), 네이티브 지원이 필요해지면 공식 `@portone/react-native-sdk`(Expo config plugin 제공) 도입을 검토한다
 - 결제수단은 신용카드/퀵계좌이체로 한정 (간편결제·휴대폰소액결제 등은 PG사와 별도 계약 필요 — 초기 스코프 제외)
+- **가격/프로모션 관리(Phase 18 후속)**: Pro 월 요금은 애초 `application.yml`(`app.portone.pro-monthly-price-krw`) 고정값이었으나, Admin이 재배포 없이 가격을 바꾸고 기간제 프로모션가를 설정할 수 있도록 `subscription_pricing`(§5) 단일 행 테이블로 옮겼다(`free_tier_settings`와 동일한 패턴). **가입 시점 가격을 구독별로 잠그지 않는다** — 신규 구독/기존 구독의 다음 달 갱신(재예약) 모두 청구 시점의 유효가(`SubscriptionPricing#effectivePriceKrw` — 프로모션 기간이면 프로모션가, 아니면 기본가)를 그대로 쓴다. 이 값은 `SubscriptionService#chargeFirstPayment`/`#scheduleNextPayment`, `PortOneWebhookService#rescheduleNextPayment`(반복 체이닝의 재예약 시점) 세 지점 모두에서 매번 다시 조회한다 — 이미 포트원에 등록된 예약 건의 금액은 소급 변경되지 않고, 다음 재예약 시점부터만 새 가격이 반영된다.
+  - Admin: `GET/PUT /api/admin/subscriptions/pricing/base-price`, `PUT/DELETE /api/admin/subscriptions/pricing/promotion` — 대시보드의 "Pro 구독 가격 관리" 카드에서 조작
+  - Frontend(회원): `GET /api/subscriptions/pricing` — `/subscription` 화면이 혜택 목록(무제한 생성/설계 PDF 다운로드 — 실제 구현된 혜택만 소개, [01] 13번의 "고급 분석"은 미구현이라 제외)과 함께 기본가/프로모션가를 보여주는 상품 소개 UI로 이 값을 쓴다
+
+## 4-8. 쿠폰 & 계정 제재 (Phase 19)
+
+**쿠폰**: 이벤트로 외부에 공개하는 코드를 사용자가 직접 등록하면 Pro를 무료로 체험할 수 있다. 핵심은
+"구독과 무관하게 이 시각까지는 Pro"를 보장하는 `users.pro_expires_at`(§5) — 결제 웹훅/사용자 해지가
+무조건 plan을 FREE로 되돌리던 기존 로직이 이 값을 무시하지 못하게 막았다(`Member#syncPlanFromSubscriptionEnd`
+— proExpiresAt이 아직 미래면 FREE로 내리지 않는다). 지급 규칙은 `Member#extendProUntil(days)` 하나로
+통일: FREE였다면 오늘부터 N일, 이미 유효한 proExpiresAt이 있었다면(기존 쿠폰이 남아있거나 이미 Pro라면)
+그 시점부터 이어서 N일 연장 — "Free는 신규 지급, Pro는 갱신 기간을 혜택만큼 늘려준다"는 요구사항을
+연장 시작점(`max(기존 proExpiresAt, now)`) 하나로 구현했다. 이 메서드는 쿠폰 사용(`CouponService`)과
+Admin의 일괄 지급(`MemberAdminService#bulkGrantPro`)이 공유한다. 순수 지급/쿠폰만으로 Pro인(결제 구독이
+뒷받침하지 않는) 사용자의 만료 처리는 이 코드베이스의 첫 `@Scheduled` 잡인 `ProGrantExpirationScheduler`
+(시간당 1회)가 담당 — 활성 구독(ACTIVE/PAST_DUE)이 있는 사용자는 건드리지 않는다(그쪽은 결제 흐름이
+관리). `coupons`/`coupon_redemptions`(§5) 2개 테이블, `UNIQUE(coupon_id, user_id)`로 동일 유저의 중복
+사용을 DB 레벨에서 막는다. API: `POST /api/coupons/redeem`(회원), `/api/admin/coupons`(코드 생성/목록/
+비활성화), `/api/admin/coupons/redemptions`(사용 현황).
+
+`GET /api/auth/me`(`MemberResponse`)도 `proExpiresAt`을 함께 반환한다 — Frontend가 "결제 구독 없이도
+Pro인지"를 판별하려면 `plan`만으로는 부족해(구독 여부와 무관하게 Pro일 수 있음) 이 값이 있어야
+"쿠폰/프로모션으로 O월 O일까지 Pro" 같은 안내를 정확히 보여줄 수 있다(Phase 19-C/D에서 구독 화면이
+`subscription.status`만 보고 쿠폰-Pro 사용자를 Free로 잘못 표시하던 버그를 고치며 추가).
+
+**계정 제재(BAN)**: `permanent_ban`(영구) / `temp_ban_until`(기간제, nullable) 두 필드로 분리해 관리한다
+— sentinel 날짜로 영구를 표현하는 방식 대신 boolean을 쓴 이유는 "영구인지 아닌지"가 코드에서 바로
+읽히게 하기 위함. **이미 발급된 JWT(액세스 토큰, 최대 30분 유효)까지 즉시 차단**하는 게 핵심이라(그렇지
+않으면 "지금 악용 중인 사용자를 막는다"는 제재의 목적이 흐려짐), 기존에 클레임만 신뢰하고 DB를 전혀
+조회하지 않던 `JwtAuthenticationFilter`에 회원 조회 1건을 추가했다 — 이 앱 규모에서 PK 조회 1건은
+성능상 무시할 수준이라 판단(문제가 되면 이미 Redis를 쓰는 `RefreshTokenStore`처럼 캐시로 옮길 수 있음,
+지금은 과설계로 보고 안 함). 제재된 사용자는 403 + `ACCOUNT_BANNED` 코드로 즉시 거부되며, 로그인 시도
+자체도 `AuthService.login`/`oauthLogin`/`refresh`에서 동일하게 막는다(재로그인으로 새 토큰을 받아가는
+것도 차단). Admin: `POST /api/admin/users/{userId}/ban`(`{permanent, until}`), `.../unban`.
+
+**Admin의 회원 관리 액션**: 기존엔 조회만 가능했던 `MemberAdminController`에 쓰기 액션을 추가했다.
+`POST /api/admin/users/pro-grant`(`{userIds[], days}`, `PlanningVersionService#deleteAll`류의 "전체
+조회 → 개수 검증 → 없는 id 있으면 통째로 400 → 각각 적용" 패턴), `POST /api/admin/users/{userId}/downgrade`
+(강제 Free 전환 — 활성 구독이 있으면 `SubscriptionService#cancelActiveSubscription`을 재사용해 PortOne
+예약도 함께 취소한 뒤, 쿠폰 등으로 남은 보장 기간까지 포함해 무조건 Free로 확정).
 
 ---
 
@@ -233,20 +290,24 @@ PG사는 **토스페이먼츠(신모듈)**, 결제 게이트웨이는 **포트�
 
 버전 관리·설문 불변성 요구사항([01] 5,6,8,9,11 / [02] §7)을 그대로 테이블로 옮긴다. DB는 Supabase가 관리하는 PostgreSQL을 사용하되, 접근은 기존 계획대로 Spring Data JPA + Querydsl + Flyway로 한다 (Supabase 자체 클라이언트/Auth는 사용하지 않음). 실제 마이그레이션은 `database/migarations/`에 Flyway로 작성한다.
 
-| 테이블               | 주요 컬럼                                                                                                   | 비고                                                     |
-| -------------------- | ----------------------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
-| `users`              | id, email, password_hash, provider, provider_id, role, plan, created_at                                     | `provider=LOCAL\|GOOGLE\|APPLE\|...`, `role=USER\|ADMIN` |
-| `workspaces`         | id, user_id(FK), name, status, deleted_at, created_at                                                       | 소프트 삭제                                              |
-| `survey_definitions` | id, survey_key, version, title, schema(jsonb)                                                               | `unique(survey_key, version)`, Admin에서 발행            |
-| `survey_responses`   | id, survey_definition_id(FK), workspace_id(FK), answers(jsonb, 암호화), submitted_at                        | **불변**                                                 |
-| `planning_versions`  | id, workspace_id(FK), survey_response_id(FK), version_no, content(jsonb, 암호화), status, deleted_at        | status: GENERATING/COMPLETED/FAILED, 소프트 삭제         |
-| `analysis_versions`  | id, planning_version_id(FK), version_no, content(jsonb, 암호화), status, deleted_at                         | survey_response 없음, 소프트 삭제                        |
-| `design_versions`    | id, analysis_version_id(FK), survey_response_id(FK), version_no, content(jsonb, 암호화), status, deleted_at | 소프트 삭제                                              |
-| `documents`          | id, source_type(PLANNING/ANALYSIS/DESIGN), source_id, file_url, generated_at                                | PDF 산출물 (Supabase Storage 경로)                       |
-| `ai_generation_jobs` | id, target_type, target_id, status, error_message, created_at                                               | 폴링용                                                   |
-| `subscriptions`      | id, user_id(FK), plan, status, billing_key(암호화), next_billing_at, started_at, expires_at                 | `status=ACTIVE\|PAST_DUE\|CANCELED`, [01] 13번 BM        |
-| `payment_history`    | id, subscription_id(FK), payment_id, amount, status, paid_at, created_at                                    | `payment_id` unique — 웹훅 멱등 처리 키                  |
-| `usage_quotas`       | id, user_id(FK), period(YYYY-MM), generation_count, limit_count                                             | Free 티어 생성 횟수 제한                                 |
+| 테이블                 | 주요 컬럼                                                                                                                            | 비고                                                                                                                                       |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| `users`                | id, email, name, password_hash, provider, provider_id, role, plan, pro_expires_at, temp_ban_until, permanent_ban, withdrawn_at, created_at | `provider=LOCAL\|GOOGLE\|APPLE\|...`, `role=USER\|ADMIN`. `pro_expires_at`(V9)은 쿠폰/관리자 지급으로 구독과 무관하게 보장된 Pro 만료 시각. `name`(V10)은 옵셔널 표시 이름 — NULL이면 프론트가 이메일로 대체 표시 |
+| `workspaces`           | id, user_id(FK), name, status, deleted_at, created_at                                                                                | 소프트 삭제                                                                                                                                |
+| `survey_definitions`   | id, survey_key, version, title, schema(jsonb)                                                                                        | `unique(survey_key, version)`, Admin에서 발행                                                                                              |
+| `survey_responses`     | id, survey_definition_id(FK), workspace_id(FK), answers(jsonb, 암호화), submitted_at                                                 | **불변**                                                                                                                                   |
+| `planning_versions`    | id, workspace_id(FK), survey_response_id(FK), version_no, content(jsonb, 암호화), status, deleted_at                                 | status: GENERATING/COMPLETED/FAILED, 소프트 삭제                                                                                           |
+| `analysis_versions`    | id, planning_version_id(FK), version_no, content(jsonb, 암호화), status, deleted_at                                                  | survey_response 없음, 소프트 삭제                                                                                                          |
+| `design_versions`      | id, analysis_version_id(FK), survey_response_id(FK), version_no, content(jsonb, 암호화), status, deleted_at                          | 소프트 삭제                                                                                                                                |
+| `documents`            | id, source_type(PLANNING/ANALYSIS/DESIGN), source_id, file_url, generated_at                                                         | PDF 산출물 (Supabase Storage 경로)                                                                                                         |
+| `ai_generation_jobs`   | id, target_type, target_id, status, error_message, created_at                                                                        | 폴링용                                                                                                                                     |
+| `subscriptions`        | id, user_id(FK), plan, status, billing_key(암호화), next_billing_at, next_payment_schedule_id, started_at, expires_at                | `status=ACTIVE\|PAST_DUE\|CANCELED`, [01] 13번 BM. `next_payment_schedule_id`(V7)는 사용자 해지 시 PortOne 예약을 취소하기 위한 값         |
+| `payment_history`      | id, subscription_id(FK), payment_id, amount, status, paid_at, created_at                                                             | `payment_id` unique — 웹훅 멱등 처리 키                                                                                                    |
+| `usage_quotas`         | id, user_id(FK), period(YYYY-MM), generation_count, limit_count                                                                      | 월별 AI 생성 횟수 제한(Phase 20부터 FREE/PRO 모두 적용, 이전엔 FREE만)                                                                     |
+| `free_tier_settings`   | id, free_monthly_limit, pro_monthly_limit, created_at, updated_at                                                                    | 단일 행(V5, `subscription_pricing`과 동일 패턴). V10에서 기존 `monthly_limit`을 `free_monthly_limit`으로 rename하고 `pro_monthly_limit` 추가 |
+| `subscription_pricing` | id, base_price_krw, promo_price_krw, promo_starts_at, promo_ends_at, updated_at                                                      | 단일 행(V8, `free_tier_settings`와 동일 패턴). promo\_\* 세 컬럼은 전부 NULL 또는 전부 채워짐만 허용                                       |
+| `coupons`              | id, code(unique), benefit_days, max_redemptions, redemption_count, expires_at, active, created_at                                    | V9. `code`는 관리자가 직접 지정                                                                                                            |
+| `coupon_redemptions`   | id, coupon_id(FK), user_id(FK), redeemed_at, granted_until                                                                           | V9. `unique(coupon_id, user_id)` — 동일 유저 중복 사용 방지                                                                                |
 
 **삭제 정책**: `workspaces`/`*_versions`는 `deleted_at` 기반 소프트 삭제를 기본으로 한다 ([01] 6, 9번의 다중 선택 삭제는 소프트 삭제로 처리, 목록/조회 API에서 필터링). 사용자가 완전 삭제(예: 회원 탈퇴에 따른 개인정보 삭제)를 요청하는 경우에 한해 하드 삭제 API를 별도로 제공한다. 상위 버전(기획)이 소프트 삭제되어도 이를 참조하는 하위 버전(분석/설계)은 조회만 가능하고 재생성은 막는다.
 
@@ -260,13 +321,13 @@ PG사는 **토스페이먼츠(신모듈)**, 결제 게이트웨이는 **포트�
 
 전 구간 무료 티어로 구성한다.
 
-| 대상             | 플랫폼                           | 비고                                                                                   |
-| ---------------- | -------------------------------- | -------------------------------------------------------------------------------------- |
-| Admin            | **Vercel**                       | Vite 정적 빌드 배포, 무료 티어                                                         |
-| Backend          | **Render**                       | Docker 컨테이너 배포, 무료 Web Service(0.1 CPU/512MB) — 프로젝트 내부 사정으로 Koyeb에서 전환 |
-| Frontend (네이티브) | **EAS Build (내부/테스트 배포)** | 스토어 정식 출시 아님 — Android는 APK 내부 배포, iOS는 Ad-hoc/TestFlight 수준으로 한정 |
-| Frontend (웹)    | **Vercel**                       | `npx expo export -p web` 정적 빌드(`frontend/vercel.json`), Admin과 동일한 무료 티어 배포. Google 로그인은 이 웹 빌드에서만 지원(§4-5 참고) |
-| Database/Storage | Supabase                         | §1/§5에서 이미 확정                                                                    |
+| 대상                | 플랫폼                           | 비고                                                                                                                                        |
+| ------------------- | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| Admin               | **Vercel**                       | Vite 정적 빌드 배포, 무료 티어                                                                                                              |
+| Backend             | **Render**                       | Docker 컨테이너 배포, 무료 Web Service(0.1 CPU/512MB) — 프로젝트 내부 사정으로 Koyeb에서 전환                                               |
+| Frontend (네이티브) | **EAS Build (내부/테스트 배포)** | 스토어 정식 출시 아님 — Android는 APK 내부 배포, iOS는 Ad-hoc/TestFlight 수준으로 한정                                                      |
+| Frontend (웹)       | **Vercel**                       | `npx expo export -p web` 정적 빌드(`frontend/vercel.json`), Admin과 동일한 무료 티어 배포. Google 로그인은 이 웹 빌드에서만 지원(§4-5 참고) |
+| Database/Storage    | Supabase                         | §1/§5에서 이미 확정                                                                                                                         |
 
 **배포 방식**: Render는 GitHub App으로 레포를 직접 watch하다가 push 시 자체적으로 빌드/배포한다 — Koyeb처럼 GitHub Actions에서 API를 호출하는 방식이 아니라, 레포 루트의 `render.yaml`(Blueprint)을 대시보드에서 한 번 연결해두면 별도 워크플로우 없이 자동 배포된다. 모노레포이므로 `buildFilter`로 `backend/**`, `database/migarations/**` 변경 시에만 배포되도록 제한한다. Vercel(Admin/Frontend 웹)도 프로젝트별 Root Directory 설정으로 동일하게 스코프된다.
 

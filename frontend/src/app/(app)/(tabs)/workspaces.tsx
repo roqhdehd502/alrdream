@@ -1,15 +1,17 @@
 import { useCallback, useEffect, useState } from "react";
 import { FlatList, Pressable, Text, View } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
-import { workspacesApi } from "../../api/workspaces";
-import { ApiError } from "../../api/client";
-import { ScreenContainer } from "../../components/ui/ScreenContainer";
-import { Button } from "../../components/ui/Button";
-import { Card } from "../../components/ui/Card";
-import { Field } from "../../components/ui/Field";
-import { EmptyState, ErrorBanner, Loading } from "../../components/ui/Feedback";
-import { useTheme, useThemedStyles } from "../../components/ui/ThemeContext";
-import type { Workspace } from "../../types";
+import { workspacesApi } from "../../../api/workspaces";
+import { ApiError } from "../../../api/client";
+import { ScreenContainer } from "../../../components/ui/ScreenContainer";
+import { Card } from "../../../components/ui/Card";
+import { Field } from "../../../components/ui/Field";
+import { EmptyState, ErrorBanner, Loading } from "../../../components/ui/Feedback";
+import { FabButton } from "../../../components/ui/FabButton";
+import { IconChip } from "../../../components/ui/IconChip";
+import { PlusIcon, WorkspaceIcon } from "../../../components/ui/icons";
+import { useTheme, useThemedStyles } from "../../../components/ui/ThemeContext";
+import type { Workspace } from "../../../types";
 
 function formatDate(value: string) {
   return new Date(value).toLocaleDateString("ko-KR");
@@ -17,12 +19,13 @@ function formatDate(value: string) {
 
 export default function WorkspaceListScreen() {
   const router = useRouter();
-  const { typography } = useTheme();
+  const { colors, typography } = useTheme();
   const styles = useThemedStyles((colors) => ({
-    headerRow: { flexDirection: "row" as const, alignItems: "flex-end" as const, gap: 12, flexWrap: "wrap" as const },
-    search: { minWidth: 220, flexGrow: 1 },
+    search: { marginBottom: 12 },
     list: { gap: 12, paddingBottom: 24 },
     itemCard: { borderColor: colors.border },
+    itemRow: { flexDirection: "row" as const, alignItems: "center" as const, gap: 14 },
+    itemTextWrap: { flex: 1, gap: 2 },
   }));
   const [keyword, setKeyword] = useState("");
   const [workspaces, setWorkspaces] = useState<Workspace[] | null>(null);
@@ -51,10 +54,12 @@ export default function WorkspaceListScreen() {
 
   return (
     <ScreenContainer scroll={false}>
-      <View style={styles.headerRow}>
-        <Field placeholder="워크스페이스 검색" value={keyword} onChangeText={setKeyword} style={styles.search} />
-        <Button label="+ 새 워크스페이스" onPress={() => router.push("/workspaces/new")} />
-      </View>
+      <Field
+        placeholder="워크스페이스 검색"
+        value={keyword}
+        onChangeText={setKeyword}
+        containerStyle={styles.search}
+      />
 
       <ErrorBanner message={error} />
 
@@ -70,13 +75,25 @@ export default function WorkspaceListScreen() {
           renderItem={({ item }) => (
             <Pressable onPress={() => router.push(`/workspaces/${item.id}`)}>
               <Card style={styles.itemCard}>
-                <Text style={typography.heading}>{item.name}</Text>
-                <Text style={typography.muted}>수정일 {formatDate(item.updatedAt)}</Text>
+                <View style={styles.itemRow}>
+                  <IconChip icon={<WorkspaceIcon size={20} color={colors.primary} />} />
+                  <View style={styles.itemTextWrap}>
+                    <Text style={typography.heading}>{item.name}</Text>
+                    <Text style={typography.muted}>수정일 {formatDate(item.updatedAt)}</Text>
+                  </View>
+                </View>
               </Card>
             </Pressable>
           )}
         />
       )}
+
+      <FabButton
+        icon={<PlusIcon size={22} color="#fff" />}
+        onPress={() => router.push("/workspaces/new")}
+        style={{ bottom: 24, right: 24 }}
+        accessibilityLabel="새 워크스페이스 추가"
+      />
     </ScreenContainer>
   );
 }

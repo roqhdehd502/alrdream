@@ -1,8 +1,11 @@
 package com.alrdream.domain.subscription.api;
 
 import com.alrdream.domain.subscription.api.dto.CreateSubscriptionRequest;
+import com.alrdream.domain.subscription.api.dto.PaymentHistoryResponse;
+import com.alrdream.domain.subscription.api.dto.PricingResponse;
 import com.alrdream.domain.subscription.api.dto.SubscriptionResponse;
 import com.alrdream.domain.subscription.domain.Subscription;
+import com.alrdream.domain.subscription.application.SubscriptionPricingService;
 import com.alrdream.domain.subscription.application.SubscriptionService;
 import com.alrdream.global.error.ErrorResponse;
 import com.alrdream.global.security.MemberPrincipal;
@@ -14,11 +17,13 @@ import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.time.OffsetDateTime;
+import java.util.List;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -34,9 +39,19 @@ public class SubscriptionController {
 	private static final Logger log = LoggerFactory.getLogger(SubscriptionController.class);
 
 	private final SubscriptionService subscriptionService;
+	private final SubscriptionPricingService subscriptionPricingService;
 
-	public SubscriptionController(SubscriptionService subscriptionService) {
+	public SubscriptionController(
+			SubscriptionService subscriptionService, SubscriptionPricingService subscriptionPricingService) {
 		this.subscriptionService = subscriptionService;
+		this.subscriptionPricingService = subscriptionPricingService;
+	}
+
+	@Operation(summary = "Pro 구독 상품 가격 조회", description = "구독 상품 소개 화면에서 혜택/가격을 보여줄 때 쓴다. 프로모션이 진행 중이면 그 가격을 함께 반환한다.")
+	@ApiResponse(responseCode = "200", description = "조회 성공")
+	@GetMapping("/pricing")
+	public ResponseEntity<PricingResponse> getPricing() {
+		return ResponseEntity.ok(PricingResponse.of(subscriptionPricingService.get()));
 	}
 
 	@Operation(
@@ -67,15 +82,16 @@ public class SubscriptionController {
 		// 안 된다(웹훅이 이 행을 찾아 결제를 확정 처리해야 한다). 예약은 웹훅의 Transaction.Paid 처리에서도
 		// 한 번 더 시도되므로(PortOneWebhookService#handlePaid), 여기서 실패해도 완전히 유실되지는 않는다.
 		OffsetDateTime nextBillingAt = OffsetDateTime.now().plusMonths(1);
+		String scheduleId;
 		try {
-			subscriptionService.scheduleNextPayment(subscriptionId, billingKeyId, nextBillingAt);
+			scheduleId = subscriptionService.scheduleNextPayment(subscriptionId, billingKeyId, nextBillingAt);
 		} catch (RuntimeException e) {
 			log.warn("다음 달 결제 예약에 실패했습니다(구독은 유지, 웹훅에서 재시도됨): subscriptionId={}", subscriptionId, e);
 			return ResponseEntity.ok(SubscriptionResponse.of(subscription));
 		}
 
-		return ResponseEntity.ok(
-				SubscriptionResponse.of(subscriptionService.finalizeSubscription(subscriptionId, nextBillingAt)));
+		return ResponseEntity.ok(SubscriptionResponse.of(
+				subscriptionService.finalizeSubscription(subscriptionId, nextBillingAt, scheduleId)));
 	}
 
 	@Operation(summary = "내 구독 상태 조회")
@@ -85,5 +101,28 @@ public class SubscriptionController {
 	@GetMapping("/me")
 	public ResponseEntity<SubscriptionResponse> getCurrent(@AuthenticationPrincipal MemberPrincipal principal) {
 		return ResponseEntity.ok(SubscriptionResponse.of(subscriptionService.getCurrent(principal.memberId())));
+	}
+
+	@Operation(
+			summary = "Pro 구독 해지",
+			description = "PortOne에 등록된 다음 결제 예약을 취소한 뒤 즉시 해지 처리한다(남은 기간 일할 환불 없음, 즉시 Free로 전환).")
+	@ApiResponse(responseCode = "200", description = "해지 성공")
+	@ApiResponse(responseCode = "400", description = "구독 내역이 없거나 이미 해지됨",
+			content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+	@DeleteMapping("/me")
+	public ResponseEntity<SubscriptionResponse> cancel(@AuthenticationPrincipal MemberPrincipal principal) {
+		Subscription subscription = subscriptionService.revokeNextPaymentSchedule(principal.memberId());
+		return ResponseEntity.ok(SubscriptionResponse.of(
+				subscriptionService.finalizeCancelation(subscription.getId(), principal.memberId())));
+	}
+
+	@Operation(summary = "내 결제 내역 조회", description = "해지 후 재구독으로 여러 구독 이력이 있어도 전체 결제 내역을 최신순으로 반환한다.")
+	@ApiResponse(responseCode = "200", description = "조회 성공")
+	@GetMapping("/me/payments")
+	public ResponseEntity<List<PaymentHistoryResponse>> getPaymentHistory(
+			@AuthenticationPrincipal MemberPrincipal principal) {
+		return ResponseEntity.ok(subscriptionService.getPaymentHistory(principal.memberId()).stream()
+				.map(PaymentHistoryResponse::of)
+				.toList());
 	}
 }

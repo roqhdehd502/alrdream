@@ -52,6 +52,27 @@ public class MemberService {
 		refreshTokenStore.invalidate(memberId);
 	}
 
+	/** Phase 20 — 표시 이름 변경(옵셔널). 빈 값 전달은 {@link Member#changeName}이 "이름 지우기"로 처리한다. */
+	@Transactional
+	public Member updateName(UUID memberId, String name) {
+		Member member = getById(memberId);
+		member.changeName(name);
+		return member;
+	}
+
+	/**
+	 * {@link MemberAdminService#downgradeToFree}의 마지막 DB 반영 단계 — 별도 빈의 별도 트랜잭션 메서드로 둬야
+	 * {@code MemberAdminService}가 PortOne 호출 단계를 트랜잭션 밖에 둘 수 있다(같은 빈 안에서 {@code this.xxx()}
+	 * 자가 호출로는 프록시를 거치지 않아 {@code @Transactional}이 무시되는 문제 — SubscriptionService의 동일
+	 * 주석 참고).
+	 */
+	@Transactional
+	public Member clearProGrant(UUID memberId) {
+		Member member = getById(memberId);
+		member.clearProGrant();
+		return member;
+	}
+
 	/** [03] §2-1 Admin의 CS 대응용 사용자 조회 — 이메일 부분 일치 검색. */
 	public Page<Member> search(String keyword, Pageable pageable) {
 		return StringUtils.hasText(keyword)

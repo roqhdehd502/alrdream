@@ -6,6 +6,7 @@ import { surveysApi } from "../../api/surveys";
 import { designApi } from "../../api/design";
 import { ApiError } from "../../api/client";
 import { Button } from "../ui/Button";
+import { Card } from "../ui/Card";
 import { EmptyState, ErrorBanner, Loading } from "../ui/Feedback";
 import { useTheme, useThemedStyles } from "../ui/ThemeContext";
 import { VersionList } from "./VersionList";
@@ -19,15 +20,17 @@ import type { AnalysisVersionDetail, AnalysisVersionSummary, SurveyAnswer, Surve
 export function AnalysisTab({ workspaceId, planningVersionId }: { workspaceId: string; planningVersionId: string | null }) {
   const router = useRouter();
   const { typography } = useTheme();
-  const styles = useThemedStyles((colors) => ({
+  const styles = useThemedStyles(() => ({
     wrap: { gap: 16 },
     detailHeader: { flexDirection: "row" as const, alignItems: "center" as const, justifyContent: "space-between" as const },
     backButton: { alignSelf: "flex-start" as const },
     actions: { gap: 10 },
     deleteLink: { alignSelf: "flex-start" as const },
     newButton: { alignSelf: "flex-start" as const },
-    confirmRow: { gap: 10, backgroundColor: colors.dangerSoft, padding: 14, borderRadius: 12 },
+    confirmRow: { gap: 10 },
     confirmButtons: { flexDirection: "row" as const, gap: 10 },
+    listHeader: { flexDirection: "row" as const, justifyContent: "flex-end" as const },
+    bulkBar: { flexDirection: "row" as const, alignItems: "center" as const, justifyContent: "space-between" as const, gap: 10 },
   }));
   const [versions, setVersions] = useState<AnalysisVersionSummary[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -35,6 +38,10 @@ export function AnalysisTab({ workspaceId, planningVersionId }: { workspaceId: s
   const [detail, setDetail] = useState<AnalysisVersionDetail | null>(null);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [bulkMode, setBulkMode] = useState(false);
+  const [bulkSelectedIds, setBulkSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkError, setBulkError] = useState<string | null>(null);
+  const [bulkConfirming, setBulkConfirming] = useState(false);
 
   const [startingDesign, setStartingDesign] = useState(false);
   const [designDefinition, setDesignDefinition] = useState<SurveyDefinition | null>(null);
@@ -134,6 +141,38 @@ export function AnalysisTab({ workspaceId, planningVersionId }: { workspaceId: s
     }
   };
 
+  const toggleBulkMode = () => {
+    setBulkMode((prev) => !prev);
+    setBulkSelectedIds(new Set());
+    setBulkError(null);
+    setBulkConfirming(false);
+  };
+
+  const toggleBulkSelect = (id: string) => {
+    setBulkSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const handleBulkDelete = async () => {
+    if (bulkSelectedIds.size === 0 || !planningVersionId) return;
+    setBusy(true);
+    try {
+      await analysisApi.remove(workspaceId, planningVersionId, Array.from(bulkSelectedIds));
+      setBulkMode(false);
+      setBulkSelectedIds(new Set());
+      setBulkConfirming(false);
+      reload();
+    } catch (e) {
+      setBulkError(e instanceof ApiError ? e.message : "삭제에 실패했습니다.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const openDesignSurvey = async () => {
     setBusy(true);
     setError(null);
@@ -157,7 +196,10 @@ export function AnalysisTab({ workspaceId, planningVersionId }: { workspaceId: s
       const job = await designApi.create(workspaceId, planningVersionId, selected.id, response.id);
       router.replace({
         pathname: "/generating",
-        params: { jobId: job.id, redirectTo: `/workspaces/${workspaceId}?tab=design` },
+        params: {
+          jobId: job.id,
+          redirectTo: `/workspaces/${workspaceId}?tab=design&analysisVersionId=${selected.id}`,
+        },
       });
     } catch (e) {
       setError(e instanceof ApiError ? e.message : "제출에 실패했습니다.");
@@ -213,6 +255,7 @@ export function AnalysisTab({ workspaceId, planningVersionId }: { workspaceId: s
         {detail?.status === "COMPLETED" && (
           <View style={styles.actions}>
             <PdfButton onGenerate={() => analysisApi.generatePdf(workspaceId, planningVersionId, selected.id)} />
+            <Button label="수정" variant="secondary" onPress={runAnalysis} loading={busy} />
             <Button label="이 분석으로 설계 시작" onPress={openDesignSurvey} loading={busy} />
             {previousVersion && (
               <Button
@@ -248,13 +291,13 @@ export function AnalysisTab({ workspaceId, planningVersionId }: { workspaceId: s
         {!confirmingDelete ? (
           <Button label="삭제" variant="ghost" onPress={() => setConfirmingDelete(true)} style={styles.deleteLink} />
         ) : (
-          <View style={styles.confirmRow}>
+          <Card tone="danger" style={styles.confirmRow}>
             <Text style={typography.muted}>정말 삭제할까요? 이 작업은 되돌릴 수 없습니다.</Text>
             <View style={styles.confirmButtons}>
               <Button label="취소" variant="secondary" onPress={() => setConfirmingDelete(false)} />
               <Button label="삭제" variant="danger" onPress={handleDelete} loading={busy} />
             </View>
-          </View>
+          </Card>
         )}
       </View>
     );
@@ -269,7 +312,42 @@ export function AnalysisTab({ workspaceId, planningVersionId }: { workspaceId: s
       ) : versions.length === 0 ? (
         <EmptyState label="아직 분석 결과가 없습니다." />
       ) : (
-        <VersionList versions={versions} onSelect={setSelected} />
+        <>
+          <View style={styles.listHeader}>
+            <Button label={bulkMode ? "선택 취소" : "선택 삭제"} variant="ghost" onPress={toggleBulkMode} />
+          </View>
+          <VersionList
+            versions={versions}
+            onSelect={setSelected}
+            selectable={bulkMode}
+            selectedIds={bulkSelectedIds}
+            onToggleSelect={toggleBulkSelect}
+          />
+          {bulkMode && (
+            <>
+              <ErrorBanner message={bulkError} />
+              {!bulkConfirming ? (
+                <View style={styles.bulkBar}>
+                  <Text style={typography.muted}>{bulkSelectedIds.size}개 선택됨</Text>
+                  <Button
+                    label="삭제"
+                    variant="danger"
+                    disabled={bulkSelectedIds.size === 0}
+                    onPress={() => setBulkConfirming(true)}
+                  />
+                </View>
+              ) : (
+                <Card tone="danger" style={styles.confirmRow}>
+                  <Text style={typography.muted}>선택한 {bulkSelectedIds.size}개를 삭제할까요? 이 작업은 되돌릴 수 없습니다.</Text>
+                  <View style={styles.confirmButtons}>
+                    <Button label="취소" variant="secondary" onPress={() => setBulkConfirming(false)} />
+                    <Button label="삭제" variant="danger" onPress={handleBulkDelete} loading={busy} />
+                  </View>
+                </Card>
+              )}
+            </>
+          )}
+        </>
       )}
     </View>
   );

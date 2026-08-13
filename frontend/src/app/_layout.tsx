@@ -1,6 +1,7 @@
 import { useFonts } from "expo-font";
-import { Stack, SplashScreen } from "expo-router";
+import { DarkTheme, DefaultTheme, Stack, SplashScreen, ThemeProvider as NavigationThemeProvider } from "expo-router";
 import { StatusBar } from "expo-status-bar";
+import { useMemo } from "react";
 import { AuthProvider, useAuth } from "../auth/AuthContext";
 import { JobCompletionBanner } from "../components/job/JobCompletionBanner";
 import { JobPollingProvider } from "../components/job/JobPollingContext";
@@ -44,13 +45,36 @@ function RootNavigator() {
 }
 
 function AppShell({ fontsReady }: { fontsReady: boolean }) {
-  const { scheme } = useTheme();
+  const { scheme, colors } = useTheme();
+  // ExpoRoot은 NavigationContainer에 항상 react-navigation의 고정 DefaultTheme(라이트)를 쓴다 —
+  // 우리 앱의 다크 모드와 무관하게 헤더/탭바가 명시적으로 칠하지 않은 여백(플로팅 탭바 마진, 화면 전환
+  // 중 카드 배경 등)에 이 고정 배경이 그대로 비쳐 "테마와 이질적인 배경"으로 보인다. 여기서 실제 테마
+  // 색으로 덮어써 react-navigation이 관리하는 모든 기본 배경을 우리 색상 체계와 일치시킨다.
+  const navigationTheme = useMemo(() => {
+    const base = scheme === "dark" ? DarkTheme : DefaultTheme;
+    return {
+      ...base,
+      dark: scheme === "dark",
+      colors: {
+        ...base.colors,
+        primary: colors.primary,
+        background: colors.bg,
+        card: colors.surface,
+        text: colors.text,
+        border: colors.border,
+        notification: colors.danger,
+      },
+    };
+  }, [scheme, colors]);
+
   return (
     <AuthProvider>
       <JobPollingProvider>
         <StatusBar style={scheme === "light" ? "dark" : "light"} />
         <SplashScreenController fontsReady={fontsReady} />
-        <RootNavigator />
+        <NavigationThemeProvider value={navigationTheme}>
+          <RootNavigator />
+        </NavigationThemeProvider>
         <JobCompletionBanner />
       </JobPollingProvider>
     </AuthProvider>

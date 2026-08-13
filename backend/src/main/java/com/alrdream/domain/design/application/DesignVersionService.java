@@ -11,6 +11,9 @@ import com.alrdream.domain.design.domain.DesignVersionRepository;
 import com.alrdream.domain.design.domain.DesignVersionStatus;
 import com.alrdream.domain.document.api.dto.DocumentResponse;
 import com.alrdream.domain.document.application.DocumentService;
+import com.alrdream.domain.member.domain.Member;
+import com.alrdream.domain.member.domain.MemberPlan;
+import com.alrdream.domain.member.domain.MemberRepository;
 import com.alrdream.domain.planning.application.PlanningVersionService;
 import com.alrdream.domain.planning.domain.PlanningVersion;
 import com.alrdream.domain.prompt.application.PromptTemplateService;
@@ -22,6 +25,7 @@ import com.alrdream.domain.survey.domain.SurveyDefinition;
 import com.alrdream.domain.survey.domain.SurveyKey;
 import com.alrdream.domain.survey.domain.SurveyResponse;
 import com.alrdream.domain.survey.domain.SurveySchema;
+import com.alrdream.global.error.ForbiddenException;
 import com.alrdream.infrastructure.ai.AiClient;
 import com.alrdream.infrastructure.ai.AiGenerationRequest;
 import com.alrdream.infrastructure.ai.PromptBuilder;
@@ -54,6 +58,7 @@ public class DesignVersionService {
 	private final PromptTemplateService promptTemplateService;
 	private final AiClient aiClient;
 	private final DocumentService documentService;
+	private final MemberRepository memberRepository;
 
 	@PersistenceContext
 	private EntityManager entityManager;
@@ -68,7 +73,8 @@ public class DesignVersionService {
 			PromptBuilder promptBuilder,
 			PromptTemplateService promptTemplateService,
 			AiClient aiClient,
-			DocumentService documentService) {
+			DocumentService documentService,
+			MemberRepository memberRepository) {
 		this.designVersionRepository = designVersionRepository;
 		this.analysisVersionService = analysisVersionService;
 		this.planningVersionService = planningVersionService;
@@ -78,6 +84,7 @@ public class DesignVersionService {
 		this.promptBuilder = promptBuilder;
 		this.promptTemplateService = promptTemplateService;
 		this.aiClient = aiClient;
+		this.memberRepository = memberRepository;
 		this.documentService = documentService;
 	}
 
@@ -131,21 +138,31 @@ public class DesignVersionService {
 
 	public Page<DesignVersion> list(
 			UUID workspaceId, UUID planningVersionId, UUID analysisVersionId, UUID userId, Pageable pageable) {
-		analysisVersionService.getOwned(analysisVersionId, planningVersionId, workspaceId, userId);
+		analysisVersionService.getForRead(analysisVersionId, planningVersionId, workspaceId, userId);
 		return designVersionRepository.findAllByAnalysisVersionIdAndDeletedAtIsNull(analysisVersionId, pageable);
 	}
 
+	/**
+	 * [03] §5 — 조회 전용. 이 설계 자신이나 상위(분석/기획)가 소프트 삭제됐어도 조회는 허용한다("재생성만 막는다").
+	 * 설계는 leaf 노드라 이 값을 입력 삼아 새로 뭔가를 만드는 경로가 없으므로 별도 strict 버전이 필요 없다.
+	 */
 	public DesignVersion getOwned(
 			UUID designVersionId, UUID analysisVersionId, UUID planningVersionId, UUID workspaceId, UUID userId) {
-		analysisVersionService.getOwned(analysisVersionId, planningVersionId, workspaceId, userId);
-		return designVersionRepository.findByIdAndAnalysisVersionIdAndDeletedAtIsNull(designVersionId, analysisVersionId)
+		analysisVersionService.getForRead(analysisVersionId, planningVersionId, workspaceId, userId);
+		return designVersionRepository.findByIdAndAnalysisVersionId(designVersionId, analysisVersionId)
 				.orElseThrow(() -> new IllegalArgumentException("존재하지 않는 설계입니다."));
 	}
 
-	/** [03] §4-6 — 완료된 설계의 PDF를 조회하거나(이미 생성됨) 새로 생성한다. */
+	/** [03] §4-6, [01] 13번 — 완료된 설계의 PDF를 조회하거나(이미 생성됨) 새로 생성한다. Pro 전용 기능이다. */
 	@Transactional
 	public DocumentResponse generatePdf(
 			UUID designVersionId, UUID analysisVersionId, UUID planningVersionId, UUID workspaceId, UUID userId) {
+		Member member = memberRepository.findById(userId)
+				.orElseThrow(() -> new IllegalArgumentException("존재하지 않는 사용자입니다."));
+		if (member.getPlan() != MemberPlan.PRO) {
+			throw new ForbiddenException("설계 문서 PDF 다운로드는 Pro 구독 전용 기능입니다.", "PRO_ONLY_FEATURE");
+		}
+
 		DesignVersion version = getOwned(designVersionId, analysisVersionId, planningVersionId, workspaceId, userId);
 		if (version.getStatus() != DesignVersionStatus.COMPLETED) {
 			throw new IllegalArgumentException("생성이 완료된 설계만 PDF로 내려받을 수 있습니다.");

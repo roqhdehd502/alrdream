@@ -1,5 +1,6 @@
 package com.alrdream.domain.ai.application;
 
+import com.alrdream.domain.ai.domain.FreeTierSetting;
 import com.alrdream.domain.ai.domain.UsageQuota;
 import com.alrdream.domain.ai.domain.UsageQuotaRepository;
 import com.alrdream.domain.member.domain.Member;
@@ -13,7 +14,11 @@ import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-/** [01] 13번, [03] §4-4 — AI 생성 Job을 만들기 전에 호출해 FREE 플랜의 월별 생성 횟수 한도를 검사/차감한다. */
+/**
+ * [01] 13번, [03] §4-4 — AI 생성 Job을 만들기 전에 호출해 월별 생성 횟수 한도를 검사/차감한다. Phase 20부터는
+ * PRO도 한도가 있다(기존엔 무제한이었다) — FREE/PRO 모두 {@link FreeTierSettingService}가 담고 있는 plan별
+ * 한도값을 그대로 적용한다.
+ */
 @Service
 public class UsageQuotaService {
 
@@ -33,14 +38,11 @@ public class UsageQuotaService {
 		this.freeTierSettingService = freeTierSettingService;
 	}
 
-	/** PRO 플랜은 무제한([01] 13번 "이후" BM)이라 통과시키고, FREE는 이번 달 quota row를 조회/생성 후 한도를 검사하고 즉시 1 차감한다. */
+	/** FREE/PRO 모두 이번 달 quota row를 조회/생성 후 plan별 한도를 검사하고 즉시 1 차감한다(Phase 20 — PRO도 한도 적용). */
 	@Transactional
 	public void checkAndIncrement(UUID userId) {
 		Member member = memberRepository.findById(userId)
 				.orElseThrow(() -> new IllegalArgumentException("존재하지 않는 사용자입니다."));
-		if (member.getPlan() == MemberPlan.PRO) {
-			return;
-		}
 
 		String period = YearMonth.now().toString();
 
@@ -53,11 +55,35 @@ public class UsageQuotaService {
 
 		UsageQuota quota = usageQuotaRepository.findByUserIdAndPeriod(userId, period)
 				.orElseGet(() -> usageQuotaRepository.save(
-						UsageQuota.create(userId, period, freeTierSettingService.get().getMonthlyLimit())));
+						UsageQuota.create(userId, period, monthlyLimitFor(member.getPlan()))));
 
 		if (quota.isExceeded()) {
-			throw new TooManyRequestsException("이번 달 무료 생성 횟수(" + quota.getLimitCount() + "회)를 모두 사용했습니다.");
+			throw new TooManyRequestsException("이번 달 생성 횟수(" + quota.getLimitCount() + "회)를 모두 사용했습니다.");
 		}
 		quota.increment();
+	}
+
+	/**
+	 * 사용자용 조회 전용 — {@link #checkAndIncrement}와 달리 row를 새로 만들거나 값을 바꾸지 않는다. 이번 달에
+	 * 아직 한 번도 생성하지 않아 row가 없으면 사용량 0으로 본다.
+	 */
+	@Transactional(readOnly = true)
+	public UsageQuotaSnapshot getCurrent(UUID userId) {
+		Member member = memberRepository.findById(userId)
+				.orElseThrow(() -> new IllegalArgumentException("존재하지 않는 사용자입니다."));
+		String period = YearMonth.now().toString();
+		int generationCount = usageQuotaRepository.findByUserIdAndPeriod(userId, period)
+				.map(UsageQuota::getGenerationCount)
+				.orElse(0);
+		int limitCount = monthlyLimitFor(member.getPlan());
+		return new UsageQuotaSnapshot(period, generationCount, limitCount, member.getPlan());
+	}
+
+	private int monthlyLimitFor(MemberPlan plan) {
+		FreeTierSetting setting = freeTierSettingService.get();
+		return plan == MemberPlan.PRO ? setting.getProMonthlyLimit() : setting.getFreeMonthlyLimit();
+	}
+
+	public record UsageQuotaSnapshot(String period, int generationCount, int limitCount, MemberPlan plan) {
 	}
 }

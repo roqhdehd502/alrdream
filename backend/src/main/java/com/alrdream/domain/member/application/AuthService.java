@@ -6,6 +6,7 @@ import com.alrdream.domain.member.domain.MemberRepository;
 import com.alrdream.domain.member.infrastructure.AppleIdTokenVerifierAdapter;
 import com.alrdream.domain.member.infrastructure.GoogleIdTokenVerifierAdapter;
 import com.alrdream.domain.member.infrastructure.OAuthUserInfo;
+import com.alrdream.global.error.ForbiddenException;
 import com.alrdream.global.security.JwtTokenProvider;
 import com.alrdream.global.security.RefreshTokenStore;
 import io.jsonwebtoken.Claims;
@@ -58,7 +59,23 @@ public class AuthService {
 				|| !passwordEncoder.matches(rawPassword, member.getPasswordHash())) {
 			throw new IllegalArgumentException("이메일 또는 비밀번호가 올바르지 않습니다.");
 		}
+		checkNotBanned(member);
 		return issueTokens(member);
+	}
+
+	/**
+	 * 이미 access token으로 인증된 사용자가 민감한 작업(예: 회원탈퇴) 전에 비밀번호만 재확인할 때 사용 —
+	 * {@link #login}과 달리 새 토큰을 발급하지 않아 {@link RefreshTokenStore}를 건드리지 않는다(회원당 refresh
+	 * token을 하나만 유지하는 구조라, login()을 재확인 용도로 재사용하면 기존 세션의 refresh token이 새
+	 * 토큰으로 덮어써져 액세스 토큰 만료 후 자동 갱신이 끊기는 문제가 있었다 — Phase 21 전수 점검에서 발견).
+	 */
+	public void verifyPassword(UUID memberId, String rawPassword) {
+		Member member = memberRepository.findById(memberId)
+				.orElseThrow(() -> new IllegalArgumentException("존재하지 않는 회원입니다."));
+		if (member.getProvider() != AuthProvider.LOCAL
+				|| !passwordEncoder.matches(rawPassword, member.getPasswordHash())) {
+			throw new IllegalArgumentException("비밀번호가 올바르지 않습니다.");
+		}
 	}
 
 	@Transactional
@@ -71,6 +88,7 @@ public class AuthService {
 
 		Member member = memberRepository.findByProviderAndProviderId(provider, userInfo.providerId())
 				.orElseGet(() -> registerOAuthMember(provider, userInfo));
+		checkNotBanned(member);
 		return issueTokens(member);
 	}
 
@@ -101,12 +119,20 @@ public class AuthService {
 
 		Member member = memberRepository.findById(memberId)
 				.orElseThrow(() -> new IllegalArgumentException("존재하지 않는 회원입니다."));
+		checkNotBanned(member);
 		return issueTokens(member);
 	}
 
 	@Transactional
 	public void logout(UUID memberId) {
 		refreshTokenStore.invalidate(memberId);
+	}
+
+	/** Phase 19 — 제재된 계정은 이미 유효한 자격증명/refresh token이 있어도 새 토큰을 발급받을 수 없다. */
+	private void checkNotBanned(Member member) {
+		if (member.isBanned()) {
+			throw new ForbiddenException(member.banMessage(), "ACCOUNT_BANNED");
+		}
 	}
 
 	private TokenIssueResult issueTokens(Member member) {

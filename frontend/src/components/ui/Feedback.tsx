@@ -1,5 +1,7 @@
+import type { ReactNode } from "react";
 import { ActivityIndicator, Text, View } from "react-native";
 import { useTheme, useThemedStyles } from "./ThemeContext";
+import { InboxIcon } from "./icons";
 import { radius } from "./theme";
 
 export function Loading() {
@@ -14,13 +16,22 @@ export function Loading() {
   );
 }
 
-export function EmptyState({ label }: { label: string }) {
-  const { typography } = useTheme();
-  const styles = useThemedStyles(() => ({
-    center: { paddingVertical: 40, alignItems: "center", justifyContent: "center" },
+export function EmptyState({ label, icon }: { label: string; icon?: ReactNode }) {
+  const { colors, typography } = useTheme();
+  const styles = useThemedStyles((colors) => ({
+    center: { paddingVertical: 40, alignItems: "center", justifyContent: "center", gap: 10 },
+    iconWrap: {
+      width: 40,
+      height: 40,
+      borderRadius: 999,
+      backgroundColor: colors.bg,
+      alignItems: "center",
+      justifyContent: "center",
+    },
   }));
   return (
     <View style={styles.center}>
+      <View style={styles.iconWrap}>{icon ?? <InboxIcon size={20} color={colors.textFaint} />}</View>
       <Text style={typography.muted}>{label}</Text>
     </View>
   );

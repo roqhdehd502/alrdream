@@ -6,6 +6,7 @@ import { surveysApi } from "../../api/surveys";
 import { analysisApi } from "../../api/analysis";
 import { ApiError } from "../../api/client";
 import { Button } from "../ui/Button";
+import { Card } from "../ui/Card";
 import { EmptyState, ErrorBanner, Loading } from "../ui/Feedback";
 import { useTheme, useThemedStyles } from "../ui/ThemeContext";
 import { VersionList } from "./VersionList";
@@ -32,16 +33,22 @@ export function PlanningTab({
 }) {
   const router = useRouter();
   const { typography } = useTheme();
-  const styles = useThemedStyles((colors) => ({
+  const styles = useThemedStyles(() => ({
     wrap: { gap: 16 },
     detailHeader: { flexDirection: "row" as const, alignItems: "center" as const, justifyContent: "space-between" as const },
     backButton: { alignSelf: "flex-start" as const },
     actions: { gap: 10 },
     deleteLink: { alignSelf: "flex-start" as const },
-    confirmRow: { gap: 10, backgroundColor: colors.dangerSoft, padding: 14, borderRadius: 12 },
+    confirmRow: { gap: 10 },
     confirmButtons: { flexDirection: "row" as const, gap: 10 },
+    listHeader: { flexDirection: "row" as const, justifyContent: "flex-end" as const },
+    bulkBar: { flexDirection: "row" as const, alignItems: "center" as const, justifyContent: "space-between" as const, gap: 10 },
   }));
   const [selected, setSelected] = useState<PlanningVersionSummary | null>(null);
+  const [bulkMode, setBulkMode] = useState(false);
+  const [bulkSelectedIds, setBulkSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkError, setBulkError] = useState<string | null>(null);
+  const [bulkConfirming, setBulkConfirming] = useState(false);
   const [detail, setDetail] = useState<PlanningVersionDetail | null>(null);
   const [detailError, setDetailError] = useState<string | null>(null);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
@@ -156,6 +163,38 @@ export function PlanningTab({
     }
   };
 
+  const toggleBulkMode = () => {
+    setBulkMode((prev) => !prev);
+    setBulkSelectedIds(new Set());
+    setBulkError(null);
+    setBulkConfirming(false);
+  };
+
+  const toggleBulkSelect = (id: string) => {
+    setBulkSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const handleBulkDelete = async () => {
+    if (bulkSelectedIds.size === 0) return;
+    setBusy(true);
+    try {
+      await planningApi.remove(workspaceId, Array.from(bulkSelectedIds));
+      setBulkMode(false);
+      setBulkSelectedIds(new Set());
+      setBulkConfirming(false);
+      onReload();
+    } catch (e) {
+      setBulkError(e instanceof ApiError ? e.message : "삭제에 실패했습니다.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
   if (editing && editDefinition) {
     return (
       <View style={styles.wrap}>
@@ -233,13 +272,13 @@ export function PlanningTab({
         {!confirmingDelete ? (
           <Button label="삭제" variant="ghost" onPress={() => setConfirmingDelete(true)} style={styles.deleteLink} />
         ) : (
-          <View style={styles.confirmRow}>
+          <Card tone="danger" style={styles.confirmRow}>
             <Text style={typography.muted}>정말 삭제할까요? 이 작업은 되돌릴 수 없습니다.</Text>
             <View style={styles.confirmButtons}>
               <Button label="취소" variant="secondary" onPress={() => setConfirmingDelete(false)} />
               <Button label="삭제" variant="danger" onPress={handleDelete} loading={busy} />
             </View>
-          </View>
+          </Card>
         )}
       </View>
     );
@@ -253,7 +292,46 @@ export function PlanningTab({
       ) : !versions || versions.length === 0 ? (
         <EmptyState label="아직 기획안이 없습니다." />
       ) : (
-        <VersionList versions={versions} onSelect={setSelected} />
+        <>
+          <View style={styles.listHeader}>
+            <Button
+              label={bulkMode ? "선택 취소" : "선택 삭제"}
+              variant="ghost"
+              onPress={toggleBulkMode}
+            />
+          </View>
+          <VersionList
+            versions={versions}
+            onSelect={setSelected}
+            selectable={bulkMode}
+            selectedIds={bulkSelectedIds}
+            onToggleSelect={toggleBulkSelect}
+          />
+          {bulkMode && (
+            <>
+              <ErrorBanner message={bulkError} />
+              {!bulkConfirming ? (
+                <View style={styles.bulkBar}>
+                  <Text style={typography.muted}>{bulkSelectedIds.size}개 선택됨</Text>
+                  <Button
+                    label="삭제"
+                    variant="danger"
+                    disabled={bulkSelectedIds.size === 0}
+                    onPress={() => setBulkConfirming(true)}
+                  />
+                </View>
+              ) : (
+                <Card tone="danger" style={styles.confirmRow}>
+                  <Text style={typography.muted}>선택한 {bulkSelectedIds.size}개를 삭제할까요? 이 작업은 되돌릴 수 없습니다.</Text>
+                  <View style={styles.confirmButtons}>
+                    <Button label="취소" variant="secondary" onPress={() => setBulkConfirming(false)} />
+                    <Button label="삭제" variant="danger" onPress={handleBulkDelete} loading={busy} />
+                  </View>
+                </Card>
+              )}
+            </>
+          )}
+        </>
       )}
     </View>
   );
