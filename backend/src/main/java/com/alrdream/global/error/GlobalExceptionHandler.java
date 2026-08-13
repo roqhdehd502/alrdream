@@ -3,6 +3,7 @@ package com.alrdream.global.error;
 import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -87,6 +88,14 @@ public class GlobalExceptionHandler {
 	@ExceptionHandler(ForbiddenException.class)
 	public ResponseEntity<ErrorResponse> handleForbidden(ForbiddenException e) {
 		return ResponseEntity.status(HttpStatus.FORBIDDEN).body(new ErrorResponse(e.getCode(), e.getMessage()));
+	}
+
+	// [Phase 21] 사전 존재 체크(예: 쿠폰 중복 사용)를 통과한 두 요청이 동시에 도착하면 DB의 UNIQUE 제약에서
+	// 뒤늦게 걸린다 — 데이터 정합성 자체는 지켜지지만(둘 다 저장되지 않음), 처리 안 하면 catch-all에 걸려
+	// 사용자에게 "이미 사용했습니다" 대신 500이 노출된다.
+	@ExceptionHandler(DataIntegrityViolationException.class)
+	public ResponseEntity<ErrorResponse> handleDataIntegrityViolation(DataIntegrityViolationException e) {
+		return ResponseEntity.badRequest().body(new ErrorResponse("BAD_REQUEST", "이미 처리된 요청입니다. 잠시 후 다시 시도해주세요."));
 	}
 
 	@ExceptionHandler(Exception.class)

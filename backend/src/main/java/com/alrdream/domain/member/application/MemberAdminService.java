@@ -4,12 +4,14 @@ import com.alrdream.domain.member.domain.Member;
 import com.alrdream.domain.member.domain.MemberRepository;
 import com.alrdream.domain.member.domain.MemberRole;
 import com.alrdream.domain.subscription.application.SubscriptionService;
+import com.alrdream.domain.subscription.domain.Subscription;
 import com.alrdream.domain.subscription.domain.SubscriptionRepository;
 import com.alrdream.domain.subscription.domain.SubscriptionStatus;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
@@ -24,14 +26,17 @@ public class MemberAdminService {
 	private final MemberRepository memberRepository;
 	private final SubscriptionRepository subscriptionRepository;
 	private final SubscriptionService subscriptionService;
+	private final MemberService memberService;
 
 	public MemberAdminService(
 			MemberRepository memberRepository,
 			SubscriptionRepository subscriptionRepository,
-			SubscriptionService subscriptionService) {
+			SubscriptionService subscriptionService,
+			MemberService memberService) {
 		this.memberRepository = memberRepository;
 		this.subscriptionRepository = subscriptionRepository;
 		this.subscriptionService = subscriptionService;
+		this.memberService = memberService;
 	}
 
 	/** [PlanningVersionService#deleteAll]류의 "전체 조회 → 개수 검증 → 없는 id 있으면 통째로 400" 패턴. */
@@ -45,19 +50,24 @@ public class MemberAdminService {
 	}
 
 	/**
-	 * 활성 구독이 있으면 {@link SubscriptionService#cancelActiveSubscription}로 PortOne 예약까지 함께
-	 * 취소한 뒤(그냥 plan만 바꾸면 결제는 계속되는데 앱에서는 Free 취급되는 불일치가 생긴다), 쿠폰 등으로
-	 * 남아있는 보장 기간까지 포함해 무조건 Free로 확정한다.
+	 * 활성 구독이 있으면 {@link SubscriptionService#revokeNextPaymentSchedule}/{@link
+	 * SubscriptionService#finalizeCancelation}로 PortOne 예약까지 함께 취소한 뒤(그냥 plan만 바꾸면 결제는
+	 * 계속되는데 앱에서는 Free 취급되는 불일치가 생긴다), 쿠폰 등으로 남아있는 보장 기간까지 포함해 무조건
+	 * Free로 확정한다. {@code PROPAGATION_NOT_SUPPORTED}로 클래스 기본 트랜잭션을 끊어둔다 — 그렇지 않으면
+	 * PortOne 호출(되돌릴 수 없는 외부 호출)이 이 메서드의 트랜잭션 커넥션을 붙든 채 실행되고, 마지막 DB 반영
+	 * 단계가 실패해 롤백되면 "PortOne은 이미 취소됐는데 DB는 구독 활성"인 조용한 불일치가 생긴다(Phase 21
+	 * 전수 점검에서 발견 — SubscriptionService 클래스 주석의 subscribe()와 같은 문제). 마지막 Free 확정도
+	 * 그래서 같은 빈이 아닌 {@link MemberService#clearProGrant}(별도 트랜잭션)를 호출한다.
 	 */
-	@Transactional
+	@Transactional(propagation = Propagation.NOT_SUPPORTED)
 	public Member downgradeToFree(UUID userId) {
 		subscriptionRepository.findFirstByUserIdOrderByStartedAtDesc(userId)
 				.filter(subscription -> subscription.getStatus() != SubscriptionStatus.CANCELED)
-				.ifPresent(subscription -> subscriptionService.cancelActiveSubscription(userId));
-
-		Member member = getById(userId);
-		member.clearProGrant();
-		return member;
+				.ifPresent(subscription -> {
+					Subscription revoked = subscriptionService.revokeNextPaymentSchedule(userId);
+					subscriptionService.finalizeCancelation(revoked.getId(), userId);
+				});
+		return memberService.clearProGrant(userId);
 	}
 
 	/**

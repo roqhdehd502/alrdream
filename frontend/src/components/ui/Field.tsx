@@ -58,7 +58,13 @@ export function Field({ label, error, style, containerStyle, secureTextEntry, ..
           {...rest}
         />
         {secureTextEntry ? (
-          <Pressable style={styles.toggle} onPress={() => setVisible((v) => !v)} hitSlop={8}>
+          <Pressable
+            style={styles.toggle}
+            onPress={() => setVisible((v) => !v)}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel={visible ? "비밀번호 숨기기" : "비밀번호 표시"}
+          >
             {visible ? (
               <EyeOffIcon size={18} color={colors.textFaint} />
             ) : (

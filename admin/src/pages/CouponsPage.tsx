@@ -5,6 +5,7 @@ import { Pagination } from "../components/Pagination";
 import { PageHeader } from "../components/PageHeader";
 import { EmptyState, ErrorAlert, Loading } from "../components/Feedback";
 import type { CouponResponse } from "../types";
+import { validateCouponForm } from "./couponValidation";
 
 function formatDate(value: string | null) {
   if (!value) return "무기한";
@@ -40,26 +41,40 @@ export function CouponsPage() {
       .catch((e) => setError(e instanceof ApiError ? e.message : String(e)));
   };
 
-  useEffect(load, [page]);
+  useEffect(() => {
+    let cancelled = false;
+    setCoupons(null);
+    couponsApi
+      .list(page)
+      .then((res) => {
+        if (cancelled) return;
+        setCoupons(res.content);
+        setPageInfo({ totalPages: res.page.totalPages, totalElements: res.page.totalElements });
+      })
+      .catch((e) => {
+        if (!cancelled) setError(e instanceof ApiError ? e.message : String(e));
+      });
+    // 페이지를 빠르게 넘기면 먼저 보낸 요청이 나중에 도착해 최신 화면을 덮어쓸 수 있어(stale response),
+    // 재실행 시 이전 요청의 결과 반영을 막는다(UsersPage와 동일 패턴 — Phase 21 전수 점검에서 발견).
+    return () => {
+      cancelled = true;
+    };
+  }, [page]);
 
   const createCoupon = async () => {
-    if (!code.trim()) {
-      setCreateMessage("쿠폰 코드를 입력해주세요.");
-      return;
-    }
-    const days = Number(benefitDays);
-    if (!Number.isInteger(days) || days < 1) {
-      setCreateMessage("지급 일수는 1 이상의 정수를 입력해주세요.");
+    const validated = validateCouponForm({ code, benefitDays, maxRedemptions, expiresAt });
+    if (!validated.ok) {
+      setCreateMessage(validated.message);
       return;
     }
     setCreating(true);
     setCreateMessage(null);
     try {
       await couponsApi.create({
-        code: code.trim(),
-        benefitDays: days,
-        maxRedemptions: maxRedemptions.trim() ? Number(maxRedemptions) : undefined,
-        expiresAt: expiresAt ? fromDatetimeLocalValue(expiresAt) : undefined,
+        code: validated.code,
+        benefitDays: validated.benefitDays,
+        maxRedemptions: validated.maxRedemptions,
+        expiresAt: validated.expiresAt ? fromDatetimeLocalValue(validated.expiresAt) : undefined,
       });
       setCode("");
       setBenefitDays("");

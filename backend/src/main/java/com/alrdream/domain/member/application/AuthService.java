@@ -63,6 +63,21 @@ public class AuthService {
 		return issueTokens(member);
 	}
 
+	/**
+	 * 이미 access token으로 인증된 사용자가 민감한 작업(예: 회원탈퇴) 전에 비밀번호만 재확인할 때 사용 —
+	 * {@link #login}과 달리 새 토큰을 발급하지 않아 {@link RefreshTokenStore}를 건드리지 않는다(회원당 refresh
+	 * token을 하나만 유지하는 구조라, login()을 재확인 용도로 재사용하면 기존 세션의 refresh token이 새
+	 * 토큰으로 덮어써져 액세스 토큰 만료 후 자동 갱신이 끊기는 문제가 있었다 — Phase 21 전수 점검에서 발견).
+	 */
+	public void verifyPassword(UUID memberId, String rawPassword) {
+		Member member = memberRepository.findById(memberId)
+				.orElseThrow(() -> new IllegalArgumentException("존재하지 않는 회원입니다."));
+		if (member.getProvider() != AuthProvider.LOCAL
+				|| !passwordEncoder.matches(rawPassword, member.getPasswordHash())) {
+			throw new IllegalArgumentException("비밀번호가 올바르지 않습니다.");
+		}
+	}
+
 	@Transactional
 	public TokenIssueResult oauthLogin(AuthProvider provider, String idToken) {
 		OAuthUserInfo userInfo = switch (provider) {

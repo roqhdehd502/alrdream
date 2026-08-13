@@ -105,9 +105,15 @@ export function UserDetailPage() {
 
   const ban = async (permanent: boolean) => {
     if (!userId) return;
-    if (!permanent && !banUntil) {
-      setActionMessage("일시 정지 해제 시각을 입력해주세요.");
-      return;
+    if (!permanent) {
+      if (!banUntil) {
+        setActionMessage("일시 정지 해제 시각을 입력해주세요.");
+        return;
+      }
+      if (new Date(banUntil).getTime() <= Date.now()) {
+        setActionMessage("일시 정지 해제 시각은 현재보다 미래여야 합니다.");
+        return;
+      }
     }
     setActionBusy("ban");
     setActionMessage(null);

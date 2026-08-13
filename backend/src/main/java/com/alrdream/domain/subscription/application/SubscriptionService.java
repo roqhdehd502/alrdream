@@ -31,6 +31,9 @@ import org.springframework.transaction.annotation.Transactional;
  * — PortOneWebhookService의 동일 문제 주석 참고 — 반드시 외부(컨트롤러)에서 호출해야 한다):
  * {@link #createPendingSubscription} → (컨트롤러가 PortOne 결제 호출) → 실패 시 {@link #cancelSubscription},
  * 성공 시 (컨트롤러가 다음 결제 예약 호출 후) {@link #finalizeSubscription}.
+ *
+ * <p>해지({@link #revokeNextPaymentSchedule} → {@link #finalizeCancelation})도 동일한 이유로 같은 방식으로
+ * 나뉘어 있다 — Phase 21 전수 점검에서 이 둘이 원래 하나의 {@code @Transactional} 메서드였던 것을 발견해 고쳤다.
  */
 @Service
 public class SubscriptionService {
@@ -92,12 +95,14 @@ public class SubscriptionService {
 	}
 
 	/**
-	 * 사용자가 직접 해지할 때 사용 — PortOne에 등록된 다음 결제 예약을 실제로 취소(revoke)한 뒤에만 CANCELED로
-	 * 반영한다(그렇지 않으면 DB만 CANCELED고 PortOne은 예정대로 다음 달 결제를 진행해버린다). 즉시 해지되며
-	 * 남은 기간에 대한 일할 환불은 없다(이번 phase 스코프 밖 — [04_milestone.md] 참고).
+	 * 사용자가 직접 해지할 때(또는 관리자가 강제 Free 전환할 때) 1단계로 사용 — PortOne에 등록된 다음 결제
+	 * 예약을 실제로 취소(revoke)한다. 이 메서드는 트랜잭션이 없다 — {@code subscribe()}와 같은 이유(클래스
+	 * 주석 참고)로, 되돌릴 수 없는 외부 호출과 DB 쓰기를 하나의 트랜잭션에 묶으면 DB 쓰기 단계(예:
+	 * {@link #finalizeCancelation})에서 예외가 나 롤백될 때 "PortOne 예약은 이미 취소됐는데 DB는 여전히
+	 * 다음 달 결제 예정"이라는 조용한 불일치가 생긴다. 반드시 호출부가 성공 시 {@link #finalizeCancelation}을
+	 * 이어서 호출해야 한다.
 	 */
-	@Transactional
-	public Subscription cancelActiveSubscription(UUID userId) {
+	public Subscription revokeNextPaymentSchedule(UUID userId) {
 		Subscription subscription = subscriptionRepository.findFirstByUserIdOrderByStartedAtDesc(userId)
 				.orElseThrow(() -> new IllegalArgumentException("구독 내역이 없습니다."));
 		if (subscription.getStatus() == SubscriptionStatus.CANCELED) {
@@ -112,6 +117,17 @@ public class SubscriptionService {
 				throw new PortOnePaymentException("다음 결제 예약 취소에 실패했습니다: " + rootMessage(e), e);
 			}
 		}
+		return subscription;
+	}
+
+	/**
+	 * {@link #revokeNextPaymentSchedule}이 성공한 뒤에만 호출 — 즉시 해지되며 남은 기간에 대한 일할 환불은
+	 * 없다(이번 phase 스코프 밖 — [04_milestone.md] 참고).
+	 */
+	@Transactional
+	public Subscription finalizeCancelation(UUID subscriptionId, UUID userId) {
+		Subscription subscription = subscriptionRepository.findById(subscriptionId)
+				.orElseThrow(() -> new IllegalArgumentException("구독을 찾을 수 없습니다."));
 		subscription.cancel();
 		memberRepository.findById(userId).ifPresent(member -> {
 			member.syncPlanFromSubscriptionEnd();

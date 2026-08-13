@@ -61,6 +61,10 @@ export function LoginPage() {
   const handleConfirmReset = async (e: FormEvent) => {
     e.preventDefault();
     resetMessages();
+    if (!/^\d{6}$/.test(code)) {
+      setError("6자리 숫자 코드를 입력해주세요.");
+      return;
+    }
     setSubmitting(true);
     try {
       await authApi.confirmPasswordReset(email, code, newPassword);
@@ -178,6 +182,7 @@ export function LoginPage() {
                   id="reset-code"
                   type="text"
                   inputMode="numeric"
+                  pattern="\d{6}"
                   maxLength={6}
                   value={code}
                   onChange={(e) => setCode(e.target.value)}

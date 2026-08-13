@@ -111,8 +111,9 @@ public class SubscriptionController {
 			content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
 	@DeleteMapping("/me")
 	public ResponseEntity<SubscriptionResponse> cancel(@AuthenticationPrincipal MemberPrincipal principal) {
-		return ResponseEntity.ok(
-				SubscriptionResponse.of(subscriptionService.cancelActiveSubscription(principal.memberId())));
+		Subscription subscription = subscriptionService.revokeNextPaymentSchedule(principal.memberId());
+		return ResponseEntity.ok(SubscriptionResponse.of(
+				subscriptionService.finalizeCancelation(subscription.getId(), principal.memberId())));
 	}
 
 	@Operation(summary = "내 결제 내역 조회", description = "해지 후 재구독으로 여러 구독 이력이 있어도 전체 결제 내역을 최신순으로 반환한다.")

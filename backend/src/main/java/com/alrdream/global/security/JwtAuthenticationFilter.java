@@ -26,6 +26,10 @@ import org.springframework.web.filter.OncePerRequestFilter;
  * 차단해야 의미가 있다("지금 서비스를 악용 중인 사용자를 막는다"는 제재 기능의 목적). 그래서 기존에는
  * 클레임만 신뢰하고 DB를 전혀 조회하지 않던 이 필터에 회원 조회 1건을 추가했다 — 이 앱 규모에서 PK 조회
  * 1건 추가는 무시할 수준이라고 판단했다(성능이 실제 문제가 되면 Redis 캐시로 옮길 수 있음, 지금은 과설계).
+ *
+ * <p>Phase 21 전수 점검 — 탈퇴({@code MemberService#withdraw})는 refresh token만 무효화할 뿐 이 필터에서
+ * 검사되지 않아, 탈퇴 직전에 발급된 access token이 남은 유효기간(최대 30분) 동안 계속 정상 인증으로
+ * 통과할 수 있었다. ban 검사와 같은 자리에서 {@code isWithdrawn()}도 함께 확인해 즉시 차단한다.
  */
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
@@ -59,6 +63,10 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 						writeBannedError(response, member);
 						return;
 					}
+					if (member != null && member.isWithdrawn()) {
+						writeWithdrawnError(response);
+						return;
+					}
 					MemberPrincipal principal = new MemberPrincipal(memberId, jwtTokenProvider.getRole(claims));
 					var authorities = List.of(new SimpleGrantedAuthority("ROLE_" + principal.role().name()));
 					var authentication = new UsernamePasswordAuthenticationToken(principal, null, authorities);
@@ -76,5 +84,12 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 		response.setContentType(MediaType.APPLICATION_JSON_VALUE);
 		response.setCharacterEncoding("UTF-8");
 		objectMapper.writeValue(response.getWriter(), new ErrorResponse("ACCOUNT_BANNED", member.banMessage()));
+	}
+
+	private void writeWithdrawnError(HttpServletResponse response) throws IOException {
+		response.setStatus(HttpServletResponse.SC_FORBIDDEN);
+		response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+		response.setCharacterEncoding("UTF-8");
+		objectMapper.writeValue(response.getWriter(), new ErrorResponse("ACCOUNT_WITHDRAWN", "탈퇴한 계정입니다."));
 	}
 }

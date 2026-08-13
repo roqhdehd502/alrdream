@@ -24,7 +24,7 @@ export default function GeneratingScreen() {
     message: { textAlign: "center" as const },
     backButton: { marginTop: 16 },
   }));
-  const { job, startTracking, dismiss } = useJobPolling();
+  const { getJob, startTracking, dismiss } = useJobPolling();
 
   // 폴링 자체는 JobPollingProvider(앱 루트)가 소유한다 — 이 화면은 그 상태를 구독만 하고, 이 화면을
   // 벗어나도(뒤로가기 등) 추적은 끊기지 않는다.
@@ -33,17 +33,17 @@ export default function GeneratingScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [jobId]);
 
-  const isCurrentJob = job?.jobId === jobId;
-  const status = isCurrentJob ? job.status : "PENDING";
-  const errorMessage = isCurrentJob ? job.errorMessage : null;
+  const job = getJob(jobId);
+  const status = job?.status ?? "PENDING";
+  const errorMessage = job?.errorMessage ?? null;
 
   useEffect(() => {
-    if (isCurrentJob && job.status === "COMPLETED") {
-      dismiss();
+    if (job?.status === "COMPLETED") {
+      dismiss(jobId);
       router.replace((redirectTo ?? "/") as Href);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isCurrentJob, job?.status]);
+  }, [job?.status]);
 
   return (
     <ScreenContainer scroll={false}>
@@ -55,7 +55,7 @@ export default function GeneratingScreen() {
             <Button
               label="워크스페이스로 돌아가기"
               onPress={() => {
-                dismiss();
+                dismiss(jobId);
                 router.replace((redirectTo ?? "/") as Href);
               }}
               style={styles.backButton}

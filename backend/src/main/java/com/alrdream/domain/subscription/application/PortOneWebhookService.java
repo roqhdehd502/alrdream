@@ -164,7 +164,7 @@ public class PortOneWebhookService {
 				.join();
 
 		// 방금 등록한 예약 ID를 저장해둬야 이후 사용자가 해지할 때 이 예약을 PortOne에서 취소(revoke)할 수 있다
-		// ([03] §4-7 반복 체이닝 — SubscriptionService#cancelActiveSubscription 참고).
+		// ([03] §4-7 반복 체이닝 — SubscriptionService#revokeNextPaymentSchedule 참고).
 		subscriptionRepository.findById(subscriptionId)
 				.ifPresent(subscription -> subscription.scheduleNextBilling(nextBillingAt, nextPaymentId));
 	}

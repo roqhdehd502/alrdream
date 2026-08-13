@@ -120,6 +120,10 @@ export function SubscriptionManagementPage() {
       setPricingMessage("프로모션 시작/종료 일시를 모두 입력해주세요.");
       return;
     }
+    if (new Date(promoEndInput).getTime() <= new Date(promoStartInput).getTime()) {
+      setPricingMessage("종료 일시는 시작 일시보다 이후여야 합니다.");
+      return;
+    }
     setPromoSaving(true);
     setPricingMessage(null);
     try {

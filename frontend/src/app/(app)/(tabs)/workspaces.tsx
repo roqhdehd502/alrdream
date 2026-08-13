@@ -92,6 +92,7 @@ export default function WorkspaceListScreen() {
         icon={<PlusIcon size={22} color="#fff" />}
         onPress={() => router.push("/workspaces/new")}
         style={{ bottom: 24, right: 24 }}
+        accessibilityLabel="새 워크스페이스 추가"
       />
     </ScreenContainer>
   );

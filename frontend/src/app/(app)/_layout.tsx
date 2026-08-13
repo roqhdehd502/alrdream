@@ -22,7 +22,11 @@ export default function AppLayout() {
       <Stack.Screen name="workspaces/[id]" options={{ title: "워크스페이스" }} />
       <Stack.Screen name="subscription/payments" options={{ title: "결제 내역" }} />
       <Stack.Screen name="coupon" options={{ title: "쿠폰 등록" }} />
-      <Stack.Screen name="generating" options={{ title: "생성 중", headerBackVisible: false, gestureEnabled: false }} />
+      {/* Phase 21 전수 점검 — 폴링은 JobPollingProvider(앱 루트)가 화면과 무관하게 계속 추적하므로(Phase 16),
+          뒤로가기를 막을 이유가 없다. 예전엔 headerBackVisible/gestureEnabled를 꺼뒀는데, 화면 안내 문구
+          ("화면을 벗어나도 계속 진행되고, 완료되면 알려드려요")와 실제 동작이 모순됐다 — 뒤로가기를 열어
+          문구대로 동작하게 한다. */}
+      <Stack.Screen name="generating" options={{ title: "생성 중" }} />
     </Stack>
   );
 }

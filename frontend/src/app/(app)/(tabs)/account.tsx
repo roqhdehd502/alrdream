@@ -90,15 +90,17 @@ export default function AccountScreen() {
     setConfirmPhraseInput("");
   };
 
-  // LOCAL 계정은 현재 비밀번호로 실제 인증(로그인 API 재사용, 세션 토큰은 저장하지 않고 성공 여부만 본다),
-  // 소셜 로그인 계정은 비밀번호가 없어 이메일 재입력으로 대체한다.
+  // LOCAL 계정은 현재 비밀번호를 재확인 전용 엔드포인트로 검증한다(로그인 API는 새 refresh token을 발급해
+  // 기존 세션의 refresh token을 무효화시키므로 — 회원당 1개만 유지되는 구조라, 재확인만 하고 탈퇴를
+  // 취소해도 액세스 토큰이 만료(최대 30분)되면 자동 갱신이 끊겨 강제 로그아웃되는 버그가 있었다), 소셜 로그인
+  // 계정은 비밀번호가 없어 이메일 재입력으로 대체한다.
   const handleVerify = async () => {
     if (!member) return;
     setVerifyError(null);
     if (member.provider === "LOCAL") {
       setVerifying(true);
       try {
-        await authApi.login(member.email, verifyInput);
+        await authApi.verifyPassword(verifyInput);
         setWithdrawStep("confirm");
       } catch (e) {
         setVerifyError(

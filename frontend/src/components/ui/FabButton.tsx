@@ -9,16 +9,21 @@ export function FabButton({
   onPress,
   size = 56,
   style,
+  accessibilityLabel,
 }: {
   icon: ReactNode;
   onPress: () => void;
   size?: number;
   style?: StyleProp<ViewStyle>;
+  /** 아이콘만 있는 버튼이라 스크린리더가 읽을 텍스트가 없다 — 호출부가 반드시 넘겨야 한다(Phase 21 전수 점검). */
+  accessibilityLabel: string;
 }) {
   const { colors } = useTheme();
   return (
     <Pressable
       onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel}
       style={({ pressed }) => [
         {
           position: "absolute" as const,

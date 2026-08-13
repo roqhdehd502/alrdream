@@ -28,7 +28,8 @@ export default function ForgotPasswordScreen() {
     setSubmitting(true);
     try {
       await authApi.requestPasswordReset(email);
-      router.push({ pathname: "/reset-password", params: { email } });
+      // 코드 재요청을 반복하면 push는 스택에 /reset-password 인스턴스가 계속 쌓인다(Phase 21 전수 점검).
+      router.replace({ pathname: "/reset-password", params: { email } });
     } catch (e) {
       setError(e instanceof ApiError ? e.message : "요청에 실패했습니다.");
     } finally {

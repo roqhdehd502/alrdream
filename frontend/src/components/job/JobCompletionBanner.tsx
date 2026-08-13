@@ -9,7 +9,7 @@ import { shadows } from "../ui/theme";
  * /generating 화면 자체는 같은 정보를 이미 화면 전체로 보여주므로 거기서는 중복 노출하지 않는다.
  */
 export function JobCompletionBanner() {
-  const { job, dismiss } = useJobPolling();
+  const { jobs, dismiss } = useJobPolling();
   const router = useRouter();
   const pathname = usePathname();
   const { colors, typography } = useTheme();
@@ -33,8 +33,11 @@ export function JobCompletionBanner() {
     closeButton: { padding: 4 },
   }));
 
+  // 여러 워크스페이스에서 동시에 완료/실패한 job이 있을 수 있다 — 가장 먼저 끝난 것부터 하나씩 보여주고,
+  // 닫거나 확인하면(dismiss) 다음 job의 배너가 이어서 나타난다(Phase 21 전수 점검 — 예전엔 job을 하나만
+  // 추적해 나중 job이 먼저 것을 조용히 덮어썼다).
+  const job = jobs.find((j) => j.status === "COMPLETED" || j.status === "FAILED");
   if (!job || pathname === "/generating") return null;
-  if (job.status !== "COMPLETED" && job.status !== "FAILED") return null;
 
   const message = job.status === "COMPLETED" ? "생성이 완료됐어요 · 확인하기" : "생성에 실패했어요 · 확인하기";
 
@@ -44,13 +47,13 @@ export function JobCompletionBanner() {
         style={styles.text}
         onPress={() => {
           const redirectTo = job.redirectTo;
-          dismiss();
+          dismiss(job.jobId);
           router.push((redirectTo ?? "/") as Href);
         }}
       >
         <Text style={typography.body}>{message}</Text>
       </Pressable>
-      <Pressable style={styles.closeButton} onPress={dismiss} hitSlop={10}>
+      <Pressable style={styles.closeButton} onPress={() => dismiss(job.jobId)} hitSlop={10}>
         <Text style={{ color: colors.textMuted, fontSize: 16 }}>×</Text>
       </Pressable>
     </View>

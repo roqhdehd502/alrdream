@@ -1715,6 +1715,7 @@ return을 제거하고 plan별로 한도를 고르도록 바꿨다(엔드포인�
 컴포넌트라 판단) 타입체크/코드 리뷰로 갈음하고 실브라우저 검증은 하지 않았다.
 
 **Phase 20 후속 요구사항 3건**:
+
 1. 비밀번호 표시/숨기기 토글 — frontend `Field.tsx`가 `secureTextEntry`를 받으면 자동으로 눈 아이콘 토글이
    붙도록 고쳐 기존 5개 비밀번호 필드(로그인/회원가입 2개/재설정 2개)에 콜사이트 변경 없이 전파됐다. Admin은
    `PasswordField.tsx` 신설, `LoginPage.tsx`의 로그인/새 비밀번호 필드 2곳에 적용. 둘 다 `EyeIcon`/`EyeOffIcon`을
@@ -1738,24 +1739,201 @@ Playwright로: 비밀번호 토글(두 앱 모두 입력→가리기→토글로
 
 ---
 
-# Phase XX: 기능 및 비기능 전체 점검 - 2
+# Phase 21: 기능 및 비기능 전체 점검 - 2
 
 ## 작업 항목
 
-- [ ] backend를 대상으로 전체 점검
-- [ ] admin을 대상으로 전체 점검
-- [ ] frontend를 대상으로 전체 점검
-- [ ] 기능 및 비기능 점검 (보안 취약성도 추가로 점검)
+- [x] backend를 대상으로 전체 점검
+- [x] admin을 대상으로 전체 점검
+- [x] frontend를 대상으로 전체 점검
+- [x] 기능 및 비기능 점검 (보안 취약성도 추가로 점검)
+
+## 설계 결정 — 점검 방법론
+
+- **Phase 15와 동일한 3-병렬 서브에이전트 전체 감사**: Phase 15 이후(Phase 16~20 — 비밀번호 재설정, 회원 탈퇴,
+  Admin 대시보드 통계, AI 생성 전역 폴링, 버전 비교 뷰, 쿠폰/제재 시스템, Free/Pro 이중 AI 한도, 회원 이름/
+  아바타, 구조적 리디자인, 비밀번호 토글, 다크모드 배경 버그 두 차례 수정 등)에 코드가 크게 늘어, backend/
+  admin/frontend 각각을 다른 general-purpose 에이전트에게 맡겨 병렬로 전체 재감사했다. Phase 15가 이미 검증한
+  영역(SQL 인젝션, N+1, 웹훅 서명 등)은 "재확인" 수준으로 가볍게, Phase 15 이후 신규 코드(쿠폰/제재/이중
+  한도/회원탈퇴 2단계/전역 폴링 등)는 처음 감사하는 영역이라 중점적으로 보도록 지시했다.
+- **정적 감사 후 실제 서버로 라이브 검증**: 가장 심각했던 두 건(아래 발견 1, 3)은 코드 리뷰만으로는 "정말
+  재현되는지" 확신할 수 없어, 실제 백엔드(`:8080`)+frontend(`:8081`) 웹 빌드를 띄우고 Playwright로 재현했다.
+  특히 발견 1은 "탈퇴 1차 확인만 하고 취소해도 세션이 깨지는지"를 브라우저에서 재현 후, 그 세션의 refresh
+  token을 직접 `curl`로 재사용해 실제로 갱신되는지(수정 전엔 실패, 수정 후 200) 확인했다. 발견 3도 같은
+  방식으로 access token 하나를 그대로 들고 탈퇴 전/후 같은 요청을 두 번 보내 200→403 전환을 직접 확인했다.
+- **모든 발견을 고치지는 않았다 — 판단 기준을 명시**: HIGH/MEDIUM은 전부 고쳤다. LOW 중에서도 즉시 수정
+  가능한 것(검증 누락, 접근성 라벨, NaN 가드 등)은 전부 고쳤고, 구조적으로 더 큰 리스크/스코프가 필요한
+  항목(OAuth 탈퇴 재인증 강화, 버전 목록 페이지네이션)은 Phase 15와 동일하게 "발견했지만 이번 phase에서는
+  보류" 처리하고 이유를 아래 한계에 남겼다.
+
+## 발견 및 수정 — Backend
+
+1. **[수정] 쿠폰 상환(redeem) 동시성 경쟁 — `max_redemptions` 초과 지급 가능 (MEDIUM, 동시성)** —
+   `CouponService.redeem()`이 `coupon.isRedeemableAt()`(메모리상 `redemptionCount < maxRedemptions` 비교) →
+   `member.extendProUntil()` → `coupon.incrementRedemptionCount()` 순서로 진행되는데, 잠금 장치가 전혀 없어
+   PostgreSQL 기본 격리수준(READ COMMITTED)에서 여러 사용자가 한도 근처(예: 마지막 1장)에서 거의 동시에
+   `/api/coupons/redeem`을 호출하면 각자 커밋 전 `redemptionCount`를 읽어 모두 통과 판정을 받고 각자 Pro를
+   지급받을 수 있었다(이벤트 쿠폰이 여러 사용자에게 동시에 공지되는, 이 기능의 실사용 시나리오에서 자연
+   발생 가능). `UsageQuotaService.checkAndIncrement`가 이미 쓰고 있는 `pg_advisory_xact_lock(hashtext(...))`
+   패턴을 그대로 가져와 쿠폰 코드 단위로 직렬화했다 — 락을 조회보다 먼저 걸어야 락을 기다렸다 통과한 요청이
+   반드시 직전 요청이 커밋한 최신 `redemptionCount`를 읽는다는 점이 핵심이라(락 이후에 `findByCode`를
+   호출하도록 순서를 정확히 맞췄다), 단순히 "락만 추가"하는 것보다 미묘하게 틀리기 쉬운 지점이었다.
+2. **[수정] 구독 해지(`cancelActiveSubscription`)가 Phase 15가 고친 것과 동일한 트랜잭션 경계 버그를 재발
+   (MEDIUM, 트랜잭션 경계)** — Phase 18에서 신설된 이 메서드는 되돌릴 수 없는 PortOne 외부 호출(다음 결제
+   예약 취소)과 DB 쓰기(구독 CANCELED 확정, 회원 plan 동기화)를 하나의 `@Transactional` 안에 묶고 있었다 —
+   Phase 15가 `subscribe()`에서 정확히 이 패턴을 문제 삼아 고쳤는데 그 교훈이 새 코드에 반영되지 않았다.
+   PortOne 예약 취소가 성공한 뒤 DB 반영 단계에서 예외가 나 롤백되면 "PortOne은 이미 취소했는데 DB는 여전히
+   다음 달 결제 예정"이라는 조용한 불일치가 생겨, 다음 달에 실제로는 결제가 없는데도 DB상 Pro가 계속
+   유지될 수 있었다. `subscribe()`와 동일하게 `revokeNextPaymentSchedule`(외부 호출, 트랜잭션 없음)과
+   `finalizeCancelation`(DB 반영, 별도 `@Transactional`)로 분리하고 호출부(컨트롤러)가 순서대로 호출하도록
+   했다. 이 메서드를 호출하는 `MemberAdminService.downgradeToFree`(관리자 강제 Free 전환)도 같은 이유로
+   `@Transactional(propagation = NOT_SUPPORTED)`로 클래스 기본 트랜잭션을 끊고, 마지막 Free 확정 DB 쓰기는
+   같은 빈의 자가 호출(프록시를 안 거쳐 `@Transactional`이 무시됨 — 기존에도 있던 함정)을 피하기 위해
+   `MemberService`에 새로 추가한 `clearProGrant()`(별도 빈, 별도 트랜잭션)를 호출하도록 재구성했다.
+3. **[수정] 회원 탈퇴 후에도 이미 발급된 access token이 만료 전까지(최대 30분) 계속 유효 (LOW, 인증/세션)** —
+   `withdraw()`는 refresh token만 무효화할 뿐, `JwtAuthenticationFilter`는 클레임의 서명만 검증하고 매 요청
+   회원 조회는 제재(ban) 여부만 확인했다 — 탈퇴 여부는 어디서도 재확인하지 않아, 탈퇴 직전에 발급된 access
+   token을 가진 사용자가 "탈퇴됨"으로 표시된 이후에도 남은 유효기간 동안 정상 API를 계속 쓸 수 있었다. ban
+   검사와 같은 자리에 `member.isWithdrawn()` 검사를 추가해 즉시 `403 ACCOUNT_WITHDRAWN`으로 차단하도록 했다.
+4. **[수정] 같은 쿠폰 중복 사용 동시 요청이 500으로 노출됨 (LOW, 에러 처리 일관성)** — 더블클릭 등으로 같은
+   사용자가 같은 쿠폰을 거의 동시에 두 번 요청하면(위 1번 락으로 대부분 자연스럽게 걸러지지만, 방어를
+   이중화해둠) 사전 체크(`existsByCouponIdAndUserId`)를 둘 다 통과한 뒤 DB의 `UNIQUE(coupon_id, user_id)`
+   제약에서 두 번째 요청이 `DataIntegrityViolationException`으로 실패해 catch-all 핸들러에 걸려 500이
+   노출됐다. `GlobalExceptionHandler`에 전용 핸들러를 추가해 "이미 처리된 요청입니다" 400으로 응답하도록 했다.
+5. **[수정] `CreateCouponRequest.maxRedemptions`에 하한 검증 없음 (LOW, 입력 검증)** — `@Min(1)`이 없어
+   관리자가 0/음수를 입력하면 그 즉시 "영구 사용 불가" 쿠폰이 만들어질 수 있었다(보안 결함은 아니나 Phase
+   15의 "FREE 한도가 실수로 0" 사례와 같은 클래스의 운영 사고 가능성). `@Min(1)` 추가(null은 기존대로 무제한).
+
+- **점검했지만 문제 없었던 영역**(Phase 15가 이미 검증한 영역 재확인 + 신규 영역): AI 생성 횟수 한도
+  체크-후-증가(`UsageQuotaService`)는 이미 advisory lock으로 직렬화돼 있어 이중 한도(Free/Pro) 전환 후에도
+  race condition 없음, Admin의 Free/Pro 한도 변경 API `@Min(0)` 검증 정상, `PATCH /api/auth/me`(이름 변경)
+  IDOR 불가(principal에서만 대상 결정), 회원 탈퇴 API 자체는 단순 REST라 프론트의 2단계 확인이 UX 전용
+  설계인 것은 타당함(아래 한계 참고), 사용자 제재(ban) 시스템 전반, 워크스페이스 하위 리소스 소유권 체인,
+  SQL 인젝션(전부 파라미터 바인딩/QueryDSL), 민감정보 로깅, PortOne 웹훅 서명 검증, N+1.
+
+## 발견 및 수정 — Admin
+
+1. **[수정] `CouponsPage.tsx`에 stale-response 가드 누락 (MEDIUM)** — Phase 16에서 `UsersPage`/`PaymentsPage`
+   등에 이미 적용된 "이전 요청 응답이 최신 요청 응답을 덮어쓰지 않도록" 하는 `cancelled` 플래그 패턴이 Phase
+   19에서 신설된 `CouponsPage`에는 빠져 있었다. 페이지네이션을 빠르게 넘기면 화면과 실제 페이지 번호가
+   어긋날 수 있어, 동일 패턴을 적용했다.
+2. **[수정] 쿠폰 생성 시 `maxRedemptions`/`expiresAt` 검증 누락 (MEDIUM/LOW)** — 지급 일수는 정수/1 이상을
+   엄격히 검증하면서 최대 사용 횟수는 빈 문자열이 아니면 검증 없이 그대로 API로 보냈다(음수/소수 통과 가능)
+   — Phase 15가 고친 "FREE 한도가 실수로 0" 사례와 동일 클래스의 재발. `benefitDays`와 동일한 정수/1 이상
+   검증을 추가했다. `expiresAt`(코드 사용 기한)도 과거 시각을 막지 않아 실수로 즉시 만료되는 쿠폰이 생성될
+   수 있어, 현재보다 미래인지 검증을 추가했다.
+3. **[수정] 구독 프로모션 가격 설정에서 종료 일시가 시작 일시보다 빨라도 통과됨 (LOW)** — `savePromotion()`이
+   시작/종료 값이 채워졌는지만 확인하고 순서는 검증하지 않았다. 종료가 시작보다 이후인지 확인을 추가했다.
+4. **[수정] 일시 제재 해제 시각이 과거여도 프론트에서 막지 않음 (LOW)** — 백엔드(`MemberAdminService.ban`)는
+   이미 과거 시각을 거부하지만(재확인 완료 — 아래 참고), 프론트가 API 호출 전에 먼저 걸러주지 않아 불필요한
+   왕복이 발생했다. 클라이언트 단에도 동일한 "현재보다 미래" 검증을 추가했다.
+5. **[수정] 비밀번호 재설정 코드 입력에 자릿수 검증 없음 (LOW)** — `maxLength={6}`만 있고 6자리 미만 제출을
+   막지 않아 서버 검증에 전적으로 의존했다. `pattern="\d{6}"` + 제출 시 정규식 검증을 추가했다.
+
+- **점검했지만 문제 없었던 영역**: 라우트 가드(전 신규 라우트 `ProtectedRoute`로 보호됨), 토큰 갱신/로그아웃
+  epoch 경합(Phase 15 수정 이후 변경 없음, 재발 없음), `PasswordField` 토글 버튼(`type="button"`이라 폼
+  submit 트리거 안 함), Admin 대시보드/설정 화면들의 API 실패 처리(전부 `.catch()` 있음, Phase 15가 고친
+  "조용히 무시" 패턴 재발 없음), Free/Pro 이중 한도 설정 화면 자체 검증(이미 견고), 접근성(신규/변경 화면
+  전부 `label htmlFor` 연결·`role="alert"`/`role="status"` 사용), XSS(`dangerouslySetInnerHTML` 없음),
+  하드코딩된 시크릿 없음, 벌크/개별 Pro 지급 액션 사전 검증.
+
+## 발견 및 수정 — Frontend
+
+1. **[수정] 회원탈퇴 1차 본인 확인(LOCAL)이 로그인 API를 재사용해 기존 세션을 깨뜨림 (HIGH, 보안/세션)** —
+   `account.tsx`의 `handleVerify`가 `authApi.login()`을 "성공 여부만 확인하고 새 토큰은 버린다"는 의도로
+   재사용하고 있었는데, 백엔드는 회원당 refresh token을 1개만 유지하는 구조라 이 로그인 호출 자체가 서버
+   Redis의 refresh token을 새 값으로 이미 덮어쓴 뒤였다 — 프론트가 그 새 토큰을 저장하지 않았을 뿐, 기기에
+   남아있는 "원래" refresh token은 서버에서 이미 무효화된 상태였다. 즉 탈퇴를 1차 확인만 하고 "취소"해도,
+   액세스 토큰이 만료(최대 30분)되면 자동 갱신이 조용히 실패해 강제 로그아웃됐다. 백엔드에 새 토큰을 발급
+   하지 않는 전용 엔드포인트 `POST /api/auth/me/verify-password`(`AuthService.verifyPassword`)를 추가하고
+   프론트가 이를 쓰도록 교체했다. **실제로 재현 후 수정을 검증**: 취소 전 저장해둔 refresh token을 수정 전
+   흐름(로그인 재사용)으로 시뮬레이션했다면 실패했을 것을, 수정 후에는 "확인 → 취소" 이후에도 같은 refresh
+   token으로 `curl -X POST /api/auth/refresh`가 200으로 성공함을 직접 확인했다.
+2. **[수정] 로그아웃/탈퇴/세션 만료 시 `JobPollingContext`가 정리되지 않아 계정 간 배너 누출 (HIGH, 세션 정리)** —
+   `JobPollingProvider`가 앱 전체 수명 동안 마운트돼 있는데 `logout()`/`withdraw()` 성공 경로 어디에서도
+   추적 중이던 job을 정리하지 않았다. 진행 중이던 job이 있는 상태로 로그아웃하면 다음 poll이 401로 실패해
+   `FAILED`로 남고, 같은 기기에서 곧바로 다른 계정으로 로그인하면 `JobCompletionBanner`(인증 상태와 무관하게
+   항상 렌더링)가 **이전 계정의** 배너를 새 세션에 그대로 노출하고, 탭하면 이전 계정 소유의 워크스페이스
+   경로로 이동할 수 있었다. `JobPollingProvider`가 `useAuth()`의 `status`를 구독해 `unauthenticated`로
+   전환되는 순간(로그아웃/탈퇴/refresh 실패로 인한 강제 로그아웃 전부 포함) 추적 중이던 모든 job을 정리하도록
+   했다 — `AuthContext`가 폴링을 알 필요 없게, 계층 구조(`JobPollingProvider`가 `AuthProvider` 안쪽)를
+   그대로 활용.
+3. **[수정] `JobPollingContext`가 job을 하나만 추적해 여러 워크스페이스 동시 생성 시 먼저 것을 조용히 덮어씀
+   (MEDIUM, 폴링 경합)** — `startTracking`이 전역에 job 하나만(`job` state, `trackedJobIdRef`) 추적해,
+   워크스페이스 A에서 재생성을 시작하고 완료 전에 워크스페이스 B에서도 재생성을 시작하면 B가 A의 추적을
+   경고 없이 대체했다 — A의 완료/실패를 사용자가 영영 알 수 없었다. `job` 단일 state를 `jobId`를 key로
+   하는 `Map`으로 바꿔 여러 job을 동시에 추적하도록 했다. `JobCompletionBanner`는 완료/실패한 job 중 가장
+   먼저 끝난 것부터 하나씩 보여주고 dismiss하면 다음 것이 이어서 나타나도록(스택 없이도 아무것도 유실되지
+   않도록) 했다.
+4. **[수정] `/generating` 화면이 뒤로가기/스와이프를 막아 안내 문구와 실제 동작이 모순 (MEDIUM, 네비게이션)** —
+   폴링이 전역 Provider로 옮겨진 뒤(Phase 16)에도 화면 자체는 `headerBackVisible: false`,
+   `gestureEnabled: false`로 뒤로가기를 막고 있었는데, 화면 문구는 "화면을 벗어나도 계속 진행되고, 완료되면
+   알려드려요"라고 안내해 실제 동작과 모순이었다. 폴링이 화면과 무관하게 계속되는 지금 구조에서는 막을
+   이유가 없어 두 옵션을 제거했다.
+5. **[수정] Phase 20 신규 공용 컴포넌트에 접근성 라벨/역할 전무 (MEDIUM, 접근성)** — `FabButton`(아이콘만
+   있는 Pressable, 라벨 자체가 없어 호출부가 넘길 수도 없었음), `PillTabs`(탭 전환인데 `tab`/`tablist`
+   역할·선택 상태 없음), `Field`의 비밀번호 표시/숨기기 토글(라벨 없음) — 저장소 전체에서 접근성 속성이
+   쓰인 곳이 `ThemeMenuButton` 한 곳뿐이었다. 세 컴포넌트 모두 `accessibilityLabel`/`accessibilityRole`/
+   `accessibilityState`를 추가했다(`FabButton`은 호출부가 필수로 넘기도록 타입도 강제).
+6. **[수정] `ProgressRing`이 `NaN` progress를 방어하지 않음 (LOW)** — 현재 유일한 호출부(`account.tsx`)는
+   분모 0을 이미 막고 있어 실사용에서는 안전했지만, 컴포넌트 자체엔 방어가 없어 재사용 시 위험했다.
+   `Number.isFinite` 체크를 추가해 컴포넌트 차원에서도 안전하게 했다.
+7. **[수정] `forgot-password.tsx`가 `router.push`를 써 코드 재요청 반복 시 스택이 계속 쌓임 (LOW)** —
+   Phase 15가 고친 것과 같은 클래스의 사소한 패턴. `router.replace`로 교체.
+
+- **점검했지만 문제 없었던 영역**: 토큰 갱신 후 재시도 401 처리(Phase 15 수정 유지), Google OAuth nonce
+  검증(Phase 15 수정 유지), 재생성 화면 이동은 전부 `router.replace`(Phase 15 수정 유지, 신규 버전 비교
+  화면도 동일 패턴 준수), OAuth 계정의 탈퇴 1차 확인이 "화면에 이미 보이는 이메일 재입력"이라 실질적
+  보안 장벽은 아니지만 이는 백엔드가 애초에 bearer 토큰 외 추가 인증을 요구하지 않는 stateless REST API
+  설계의 근본적 한계라 이번 phase 스코프에서는 UX 확인 절차로만 두기로 함(아래 한계 참고), `AppShell`의
+  `navigationTheme`(직전 세션에서 신설) `useMemo` 의존성 정상 — 회귀 없음, 새 공유 컴포넌트들의 필수 prop
+  누락 크래시 가능성 없음, 하드코딩된 시크릿/민감정보 로깅 없음.
+
+## 테스트 결과
+
+- **정적 검증**: 수정 완료 후 `backend`(`./gradlew compileJava`), `admin`(`npx tsc --noEmit`, `npm run
+build`), `frontend`(`npx tsc --noEmit`, `npx expo lint`) 전부 에러 없이 통과.
+- **라이브 검증 1 — 탈퇴 1차 확인 취소 후 세션 유지**(실제 `:8080`+`:8081` 웹 빌드): 신규 계정으로 가입 →
+  마이페이지 → 회원 탈퇴 → 비밀번호로 1차 확인(네트워크 탭에서 `POST /api/auth/me/verify-password` 204 호출
+  확인, `/api/auth/login` 아님) → 취소. 그 시점의 refresh token을 그대로 `curl -X POST
+http://localhost:8080/api/auth/refresh`로 재사용해 200과 새 토큰 쌍을 정상 발급받음을 확인 — 수정 전이었다면
+  이 refresh token은 이미 서버에서 무효화돼 실패했을 것.
+- **라이브 검증 2 — 탈퇴 즉시 토큰 무효화**: 위에서 받은 access token으로 `GET /api/auth/me` 200 확인 →
+  같은 토큰으로 `DELETE /api/auth/me` 호출해 실제 탈퇴(204) → 만료되지 않은 **같은** access token으로 다시
+  `GET /api/auth/me` 호출 시 `403 ACCOUNT_WITHDRAWN`으로 즉시 차단됨을 확인(수정 전이었다면 200으로 계속
+  통과했을 것).
+- **비밀번호 표시/숨기기 접근성 라벨**: Playwright 접근성 스냅샷으로 회원가입 화면의 두 토글 버튼이
+  `button "비밀번호 표시"`로 올바르게 노출됨을 확인.
+- 이 phase에서 만든 테스트 계정은 위 검증 과정에서 그대로 탈퇴 처리했고, 두 서버 모두 종료했다.
+
+## 한계
+
+- **OAuth 계정의 회원탈퇴 1차 확인은 실질적 인증이 아니라 실수 방지용 UX 확인**: LOCAL 계정은 비밀번호
+  재확인으로 실제 인증이 되지만, OAuth 계정은 화면에 이미 보이는 이메일을 다시 입력하는 것뿐이라 탈취된
+  access token만으로도 통과된다. 다만 백엔드의 `DELETE /api/auth/me` 자체가 bearer 토큰 인증만 요구하는
+  stateless REST API라(쿠키 미사용, CSRF 우려 없음) 애초에 프론트의 확인 절차 유무와 무관하게 유효한 access
+  token 하나면 탈퇴가 가능한 구조다 — 진짜 재인증을 하려면 Google/Apple 로그인 팝업을 다시 띄워야 하는데,
+  이는 이번 phase보다 훨씬 큰 스코프(OAuth 재인증 플로우 신설)라 보류하고 한계로 남긴다.
+- **쿠폰 동시성 수정은 실제 동시 요청 타이밍으로 재현 검증하지 못함**: `pg_advisory_xact_lock` 패턴 자체는
+  이미 `UsageQuotaService`에서 검증된 방식을 그대로 재사용했지만(코드 대칭성으로 정확성 확보), 여러 프로세스가
+  정확히 같은 순간에 요청을 보내는 레이스 컨디션은 `curl` 스크립트로 안정적으로 재현하기 어려워 코드 리뷰
+  수준에 머물렀다.
+- **Admin 신규 검증 로직(CouponsPage/SubscriptionManagementPage/UserDetailPage)은 관리자 계정 없이 정적
+  검증(`tsc`/`build`)까지만 진행**: 이전 phase들과 동일한 기존 한계(시드 관리자 계정 자격 증명을 모름, DB
+  직접 UPDATE는 샌드박스 정책상 시도하지 않음)가 이번에도 반복됐다.
+- **워크스페이스별 동시 생성(여러 job 동시 추적) 수정은 실제 AI 생성 파이프라인을 두 번 동시에 트리거해
+  검증하지 못함**: Claude API 호출이 실제로 들어가는 비용/시간 문제로 Phase 17 등 이전 phase에서도 반복된
+  결정과 동일하게 코드 리뷰 수준에 머물렀다.
 
 ---
 
-# Phase XX: 문서 업데이트
+# Phase 22: 문서 업데이트
 
 ## 작업 항목
 
 - [ ] README.md에 누락사항 확인 후 업데이트
 - [ ] docs 디렉토리에 구현한 스키마 관련 md 확장자 문서 작성
-- [ ] docs 디렉토리에 구현한 사항 PPT 발표용으로 정리하여 md 확장자 문서 작성 (주요 기능 사용 예시도 캡쳐해서 이미지로 저장할 것)
+- [ ] docs 디렉토리에 구현한 사항 PPT 발표용으로 정리하여 md 확장자 문서 작성 (주요 기능 사용 예시도 캡쳐해서 이미지도 저장할 것)
 
 ---
 

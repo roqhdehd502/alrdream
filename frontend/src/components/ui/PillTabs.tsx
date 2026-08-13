@@ -30,11 +30,18 @@ export function PillTabs<T extends string>({
   }));
 
   return (
-    <View style={[styles.row, style]}>
+    <View style={[styles.row, style]} accessibilityRole="tablist">
       {items.map((item) => {
         const active = item.key === value;
         return (
-          <Pressable key={item.key} onPress={() => onChange(item.key)} style={[styles.pill, active && styles.pillActive]}>
+          <Pressable
+            key={item.key}
+            onPress={() => onChange(item.key)}
+            style={[styles.pill, active && styles.pillActive]}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: active }}
+            accessibilityLabel={item.label}
+          >
             <Text style={active ? styles.labelActive : styles.labelInactive}>{item.label}</Text>
           </Pressable>
         );

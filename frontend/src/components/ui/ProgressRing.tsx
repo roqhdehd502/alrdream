@@ -17,7 +17,9 @@ export function ProgressRing({
   label?: string;
 }) {
   const { colors } = useTheme();
-  const clamped = Math.max(0, Math.min(1, progress));
+  // progress가 NaN(예: 분모 0)이면 clamp를 거쳐도 NaN이 그대로 남아 strokeDashoffset이 깨진다(Phase 21
+  // 전수 점검) — 호출부 방어와 별개로 컴포넌트 자체가 재사용 시에도 안전하도록 여기서 0으로 되돌린다.
+  const clamped = Number.isFinite(progress) ? Math.max(0, Math.min(1, progress)) : 0;
   const radius = (size - strokeWidth) / 2;
   const circumference = 2 * Math.PI * radius;
   const dashOffset = circumference * (1 - clamped);
