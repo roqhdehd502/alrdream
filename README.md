@@ -8,6 +8,9 @@
 - [02. AI 설문 설계](./docs/02_ai_survey.md)
 - [03. 설계](./docs/03_design.md)
 - [04. 마일스톤](./docs/04_milestone.md)
+- [05. 색상 및 폰트](./docs/05_color_and_font.md)
+- [06. 데이터베이스 스키마 레퍼런스](./docs/06_schema.md)
+- [07. 발표 자료](./docs/07_presentation.md)
 
 ---
 
@@ -46,7 +49,8 @@ alrdream/
 
 - Java 21
 - Node.js 20+
-- Docker (로컬 Redis, `./gradlew test`의 Testcontainers 실행에 필요)
+- Docker (로컬 Redis, `./gradlew test`의 일부 통합 테스트가 쓰는 Testcontainers 실행에 필요 — 순수 단위
+  테스트만 돌릴 때는 없어도 된다. 아래 [테스트](#테스트) 참고)
 - Supabase 프로젝트 (PostgreSQL + Storage)
 - Anthropic Claude API Key
 - 포트원(PortOne) 가맹점 계정
@@ -98,6 +102,32 @@ cd admin
 npm install
 npm run dev        # http://localhost:5173
 ```
+
+---
+
+## 테스트
+
+세 앱 모두 단위 테스트가 있다. Docker 없이 실행 가능하다(단, backend의 `BackendApplicationTests`는
+Testcontainers로 실제 스프링 컨텍스트를 띄우는 통합 테스트라 예외 — Docker가 없으면 이 클래스만 실패한다).
+
+```bash
+# Backend — JUnit5 + Mockito + AssertJ. 도메인 순수 로직 + 서비스 계층(리포지토리는 Mockito로 대체)
+cd backend
+./gradlew test --tests "com.alrdream.domain.*"   # Docker 불필요, 이 저장소의 실질적인 단위 테스트 전부
+./gradlew test                                    # BackendApplicationTests 포함 전체(Docker 필요)
+
+# Admin — Vitest + jsdom. api/client.ts(토큰 갱신/로그아웃 경쟁 등)와 폼 검증 로직 위주
+cd admin
+npm test
+
+# Frontend — Jest(jest-expo). 순수 로직(diff/nonce 검증)과 api/client.ts
+cd frontend
+npm test
+```
+
+새 비즈니스 로직을 추가할 때는 가능하면 프레임워크/네이티브 의존성이 없는 순수 함수로 분리해 단위
+테스트를 붙인다(예: `admin/src/pages/couponValidation.ts`, `frontend/src/components/workspace/contentDiff.ts`) —
+컴포넌트/서비스 안에 검증 로직을 그대로 두면 렌더링 없이는 테스트하기 어렵다.
 
 ---
 
