@@ -1,0 +1,30 @@
+name: Keep Supabase alive
+
+# [04_milestone.md] Phase 23 — Supabase Free 플랜은 7일간 DB 활동이 없으면 프로젝트를 자동 일시정지한다.
+# 백엔드(Render Free) 안에서 Spring @Scheduled로 자정 크론을 거는 방식은 신뢰할 수 없다 — Render Free
+# 웹서비스는 15분간 HTTP 트래픽이 없으면 컨테이너 자체가 내려가므로, 정작 트래픽이 없어 문제가 되는
+# 바로 그 상황에 내부 스케줄러도 함께 죽어있어 실행되지 않는다. 백엔드 프로세스 상태와 무관하게 항상
+# 실행되는 GitHub Actions로 외부에서 매일 한 번 깨운다.
+#
+# /actuator/health는 Spring Boot Actuator의 기본 DataSource 헬스 인디케이터가 실제 DB 커넥션을
+# 확인하므로(management.health.db는 비활성화하지 않음 — application.yml 참고), 이 호출 자체가
+# "가벼운 DB 호출"이 된다. 별도 엔드포인트를 새로 만들 필요가 없다.
+
+on:
+  schedule:
+    # 매일 00:00 KST(UTC+9) = 전날 15:00 UTC
+    - cron: "0 15 * * *"
+  workflow_dispatch: {}
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping backend health endpoint
+        run: |
+          curl --fail --show-error --silent \
+            --max-time 120 \
+            --retry 5 \
+            --retry-delay 15 \
+            --retry-all-errors \
+            https://alrdream.onrender.com/actuator/health

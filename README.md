@@ -175,3 +175,10 @@ npm test
 | Database/Storage | [Supabase](https://supabase.com)  | PostgreSQL + Storage                                                                                                                                |
 
 배포 파이프라인은 마일스톤 Phase 01에서 최소 구성으로 먼저 검증한다.
+
+### Supabase Free 플랜 자동 일시정지 방지
+
+Supabase Free 플랜은 7일간 DB 활동이 없으면 프로젝트를 자동 일시정지한다. `.github/workflows/keep-supabase-alive.yml`이
+매일 KST 00:00에 백엔드 `/actuator/health`를 호출해 방지한다(Render Free의 15분 스핀다운 때문에 백엔드
+내부 스케줄러로는 신뢰할 수 없어 GitHub Actions로 외부에서 깨움 — 배경은
+[04_milestone.md Phase 23](./docs/04_milestone.md) 참고).
