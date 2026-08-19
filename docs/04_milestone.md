@@ -1963,6 +1963,51 @@ http://localhost:8080/api/auth/refresh`로 재사용해 200과 새 토큰 쌍을
 
 ---
 
+# Phase 23: DB 안정화 조치 - 1
+
+> Supabase Free 플랜은 7일간 API 요청/DB 활동이 없으면 프로젝트를 자동 일시정지(Pause)한다. 사용자가
+> "매일 자정에 가벼운 DB 호출을 스케줄링해 방지"를 제안했다.
+
+## 작업 항목
+
+- [x] 매일 1회 가벼운 DB 호출로 Supabase 자동 일시정지 방지
+
+## 설계 결정
+
+- **제안된 방식(Spring `@Scheduled` 내부 크론)을 그대로 쓰지 않은 이유**: `render.yaml`을 보면 백엔드가
+  Render **Free** 플랜이다(`plan: free`) — Free 웹서비스는 15분간 HTTP 트래픽이 없으면 컨테이너 자체가
+  내려간다(README에 이미 기록된 특성). 이 상태에서는 JVM 프로세스가 아예 떠 있지 않으므로, 내부에
+  `@Scheduled(cron = "0 0 0 * * *")`를 걸어도 자정에 프로세스가 죽어있으면 실행되지 않는다. 즉 "트래픽이
+  없어 Supabase가 잠들 위기"인 바로 그 상황에서 내부 스케줄러도 함께 잠들어 있어, 원래 제안만으로는
+  신뢰할 수 없다고 판단해 사용자에게 이 문제를 설명하고 아래 대안으로 대체해 진행했다.
+- **대안: GitHub Actions 스케줄 워크플로우**(`.github/workflows/keep-supabase-alive.yml`) — 백엔드 프로세스
+  상태와 완전히 무관하게 GitHub 자체 인프라에서 매일 KST 00:00(cron `0 15 * * *`, UTC 기준)에
+  `https://alrdream.onrender.com/actuator/health`를 호출한다. 이 요청이 Render 콜드스타트를 깨우는 것과
+  동시에, Spring Boot Actuator의 기본 DataSource 헬스 인디케이터가 실제 DB 커넥션을 확인하므로(
+  `application.yml`에서 `management.health.db`를 끄지 않았음 — Redis/Mail만 명시적으로 다룸) 이 호출
+  자체가 "가벼운 DB 호출"이 된다. 별도 백엔드 엔드포인트를 새로 만들 필요가 없었다.
+- **`curl` 재시도 옵션**: Render Free 콜드스타트는 수십 초가 걸릴 수 있어 `--max-time 120 --retry 5
+  --retry-delay 15 --retry-all-errors`로 넉넉히 재시도하도록 했다(`--retry-all-errors`가 있어야 콜드스타트
+  중 연결 자체가 실패하는 경우도 재시도 대상이 된다 — 기본 `--retry`는 일부 일시적 오류만 재시도).
+- **`workflow_dispatch` 추가**: 스케줄과 별개로 GitHub Actions 탭에서 수동 실행해 즉시 동작을 확인할 수
+  있게 했다(실제 크론 발동을 하루 기다리지 않고 검증 가능).
+- **이 저장소의 첫 GitHub Actions 워크플로우**: 기존에는 Render의 GitHub App이 push 시 자동 배포를
+  처리해 GitHub Actions가 전혀 없었다(README "GitHub Actions 불필요" 참고) — 이번 목적(외부에서 주기적으로
+  깨우기)은 배포 파이프라인과 무관한 별도 관심사라 GitHub Actions가 적합했다.
+
+## 한계
+
+- **실제 동작 검증은 하지 못함**: 이 스케줄러가 실제로 유효한지는 GitHub에 push된 뒤 Actions가 실행되고,
+  Render/Supabase 대시보드에서 결과를 확인해야 알 수 있다 — 로컬에서는 YAML 문법만 검증했다(Ruby
+  `YAML.load_file`로 파싱 확인). push 이후 Actions 탭에서 `workflow_dispatch`로 최소 1회 수동 실행해
+  실제로 200이 오는지 확인을 권장한다.
+- **GitHub Actions 스케줄의 자체 한계**: (1) 저장소에 60일간 커밋이 없으면 GitHub이 스케줄 워크플로우를
+  자동 비활성화한다 — 이 프로젝트는 활발히 커밋되고 있어 당장 문제는 아니지만 장기적으로는 유의해야 한다.
+  (2) GitHub의 스케줄 트리거는 "정확히 그 시각"이 아니라 부하에 따라 수 분~수십 분 지연될 수 있다 —
+  Supabase의 7일 기준에 비해 오차가 무의미할 정도로 작아 문제 없다고 판단했다.
+
+---
+
 # Phase XX: 프로덕션 릴리즈 마무리
 
 > 기본 배포 파이프라인은 Phase 01에서 이미 구축됨. 여기서는 완성된 전 기능을 실제로 얹고 최종 점검한다.
