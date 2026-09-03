@@ -81,6 +81,7 @@ export interface MemberAdminResponse {
   permanentBan: boolean;
   tempBanUntil: string | null;
   createdAt: string;
+  emailVerified: boolean;
 }
 
 export interface WorkspaceResponse {

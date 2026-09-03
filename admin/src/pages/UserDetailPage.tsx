@@ -213,6 +213,16 @@ export function UserDetailPage() {
               <div style={{ marginTop: 4 }}>{formatDate(member.proExpiresAt)}</div>
             </div>
             <div>
+              <div className="stat-label">이메일 인증</div>
+              <div style={{ marginTop: 4 }}>
+                {member.emailVerified ? (
+                  <span className="badge badge-success">인증됨</span>
+                ) : (
+                  <span className="badge">미인증</span>
+                )}
+              </div>
+            </div>
+            <div>
               <div className="stat-label">제재 상태</div>
               <div style={{ marginTop: 4 }}>
                 {member.banned ? (

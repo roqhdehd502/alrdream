@@ -165,6 +165,7 @@ export function UsersPage() {
                   <th>가입 경로</th>
                   <th>권한</th>
                   <th>요금제</th>
+                  <th>이메일 인증</th>
                   <th>상태</th>
                   <th>가입일</th>
                 </tr>
@@ -194,6 +195,13 @@ export function UsersPage() {
                         <span className="badge badge-success">PRO</span>
                       ) : (
                         <span className="badge">FREE</span>
+                      )}
+                    </td>
+                    <td>
+                      {member.emailVerified ? (
+                        <span className="badge badge-success">인증됨</span>
+                      ) : (
+                        <span className="badge">미인증</span>
                       )}
                     </td>
                     <td>{member.banned && <span className="badge badge-danger">제재중</span>}</td>

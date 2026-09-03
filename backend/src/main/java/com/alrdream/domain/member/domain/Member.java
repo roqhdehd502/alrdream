@@ -71,21 +71,29 @@ public class Member extends BaseEntity {
 	@Column(name = "permanent_ban", nullable = false)
 	private boolean permanentBan;
 
-	private Member(String email, String passwordHash, AuthProvider provider, String providerId) {
+	/**
+	 * Phase 23 — 이메일 인증 여부. LOCAL 가입은 false로 시작해 이메일 인증 코드로 확인해야 하고, OAuth
+	 * 가입은 공급자(Google/Apple)가 이미 이메일을 검증했으므로 가입 즉시 true다.
+	 */
+	@Column(name = "email_verified", nullable = false)
+	private boolean emailVerified;
+
+	private Member(String email, String passwordHash, AuthProvider provider, String providerId, boolean emailVerified) {
 		this.email = email;
 		this.passwordHash = passwordHash;
 		this.provider = provider;
 		this.providerId = providerId;
 		this.role = MemberRole.USER;
 		this.plan = MemberPlan.FREE;
+		this.emailVerified = emailVerified;
 	}
 
 	public static Member createLocal(String email, String passwordHash) {
-		return new Member(email, passwordHash, AuthProvider.LOCAL, null);
+		return new Member(email, passwordHash, AuthProvider.LOCAL, null, false);
 	}
 
 	public static Member createOAuth(String email, AuthProvider provider, String providerId) {
-		return new Member(email, null, provider, providerId);
+		return new Member(email, null, provider, providerId, true);
 	}
 
 	/** [03] §4-7 — 구독 결제 성공/실패 웹훅에 따라 Pro 권한을 반영한다. */
@@ -153,6 +161,11 @@ public class Member extends BaseEntity {
 	/** Phase 16 — 비밀번호 재설정. 호출 전에 provider가 LOCAL인지 확인하는 것은 호출부(PasswordResetService)의 책임이다. */
 	public void changePassword(String newPasswordHash) {
 		this.passwordHash = newPasswordHash;
+	}
+
+	/** Phase 23 — 이메일 인증 코드 확인에 성공했을 때 호출한다. */
+	public void markEmailVerified() {
+		this.emailVerified = true;
 	}
 
 	/** Phase 20 — 표시 이름 변경. 빈 문자열/공백만 있는 값은 "이름 지우기"로 보고 null로 정규화한다(기본값 이메일로 복귀). */

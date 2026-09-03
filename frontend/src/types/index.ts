@@ -12,6 +12,11 @@ export interface Member {
   role: MemberRole;
   plan: MemberPlan;
   proExpiresAt: string | null;
+  emailVerified: boolean;
+}
+
+export interface SignupVerificationRequestResponse {
+  expiresInSeconds: number;
 }
 
 export interface TokenPair {

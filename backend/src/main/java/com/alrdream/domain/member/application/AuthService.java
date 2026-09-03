@@ -26,6 +26,7 @@ public class AuthService {
 	private final RefreshTokenStore refreshTokenStore;
 	private final GoogleIdTokenVerifierAdapter googleIdTokenVerifier;
 	private final AppleIdTokenVerifierAdapter appleIdTokenVerifier;
+	private final SignupVerificationService signupVerificationService;
 
 	public AuthService(
 			MemberRepository memberRepository,
@@ -33,21 +34,31 @@ public class AuthService {
 			JwtTokenProvider jwtTokenProvider,
 			RefreshTokenStore refreshTokenStore,
 			GoogleIdTokenVerifierAdapter googleIdTokenVerifier,
-			AppleIdTokenVerifierAdapter appleIdTokenVerifier) {
+			AppleIdTokenVerifierAdapter appleIdTokenVerifier,
+			SignupVerificationService signupVerificationService) {
 		this.memberRepository = memberRepository;
 		this.passwordEncoder = passwordEncoder;
 		this.jwtTokenProvider = jwtTokenProvider;
 		this.refreshTokenStore = refreshTokenStore;
 		this.googleIdTokenVerifier = googleIdTokenVerifier;
 		this.appleIdTokenVerifier = appleIdTokenVerifier;
+		this.signupVerificationService = signupVerificationService;
 	}
 
+	/**
+	 * Phase 23 — 이메일 인증(SignupVerificationService) → 정보 입력 → 가입 순서를 강제한다. 이 이메일로
+	 * {@code SignupVerificationService.confirmCode}를 먼저 통과하지 않으면 가입 자체가 거부된다.
+	 */
 	@Transactional
 	public TokenIssueResult signup(String email, String rawPassword) {
 		if (memberRepository.existsByEmail(email)) {
 			throw new IllegalArgumentException("이미 가입된 이메일입니다.");
 		}
+		if (!signupVerificationService.consumeVerifiedEmail(email)) {
+			throw new IllegalArgumentException("이메일 인증이 필요합니다.");
+		}
 		Member member = Member.createLocal(email, passwordEncoder.encode(rawPassword));
+		member.markEmailVerified();
 		memberRepository.save(member);
 		return issueTokens(member);
 	}
