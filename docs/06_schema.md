@@ -1,6 +1,6 @@
 # 데이터베이스 스키마 레퍼런스
 
-이 문서는 `database/migarations/`(V1~V10) Flyway 마이그레이션을 실제로 적용했을 때 만들어지는 **현재 시점의
+이 문서는 `database/migarations/`(V1~V11) Flyway 마이그레이션을 실제로 적용했을 때 만들어지는 **현재 시점의
 최종 스키마**를 테이블 단위로 정리한 기술 레퍼런스다. 왜 이런 구조를 택했는지에 대한 설계 배경/트레이드오프는
 [03_design.md §5](./03_design.md)에 이미 정리돼 있으니 여기서는 반복하지 않고, "지금 DB에 실제로 무엇이
 있는가"를 빠르게 찾아보는 용도로 쓴다. 마이그레이션 파일 자체가 항상 정답(source of truth)이며, 이 문서는
@@ -58,12 +58,17 @@ erDiagram
 | `temp_ban_until` | TIMESTAMPTZ | NULL 허용 | V9 |
 | `permanent_ban` | BOOLEAN | NOT NULL DEFAULT `false` | V9 |
 | `withdrawn_at` | TIMESTAMPTZ | NULL 허용 | V6 |
+| `email_verified` | BOOLEAN | NOT NULL DEFAULT `false` | V11 |
 | `created_at` / `updated_at` | TIMESTAMPTZ | NOT NULL DEFAULT `now()` | V1 |
 
 - `UNIQUE(provider, provider_id)` — 같은 OAuth 계정으로 중복 가입 방지.
 - `password_hash`가 NULL이면 반드시 `provider != LOCAL`(OAuth 전용 계정)이라는 뜻 — DB 제약이 아니라
   애플리케이션(`AuthService`)이 지키는 불변식이다.
 - `name`이 NULL이면 프론트가 이메일 앞부분으로 대체 표시한다(표시 로직은 서버가 아닌 클라이언트 책임).
+- `email_verified`는 `LOCAL` 가입은 `false`로 시작해 이메일 인증 코드로 확인해야 하고, `GOOGLE`/`APPLE`
+  가입은 공급자가 이미 이메일을 검증했으므로 가입 즉시 `true`다(V11 마이그레이션이 기존 OAuth 계정도
+  소급 반영). 인증 코드 자체는 별도 테이블 없이 `PasswordResetCodeStore`와 같은 구조의 Redis
+  TTL 저장소(`EmailVerificationCodeStore`)로 관리한다.
 - 탈퇴(`withdraw()`)는 하드 삭제 대신 `email`을 `withdrawn-<id>@deleted.local`로 익명화하고
   `withdrawn_at`을 채운다 — `subscriptions`/`payment_history`/`workspaces` 등이 FK로 참조해 하드 삭제가
   불가능하고, 결제 이력은 세무/분쟁 대응을 위해 보존해야 하기 때문.
@@ -308,6 +313,7 @@ CHECK 제약으로 `promo_*` 세 컬럼이 **전부 NULL(프로모션 없음)** 
 | V8 | `subscription_pricing` 신설(가격/프로모션 관리) |
 | V9 | `users.pro_expires_at`/`temp_ban_until`/`permanent_ban` 추가, `coupons`/`coupon_redemptions` 신설 |
 | V10 | `free_tier_settings`를 FREE/PRO 이중 한도로 분리, `users.name` 추가 |
+| V11 | `users.email_verified` 추가(이메일 인증), 기존 OAuth 계정은 인증됨으로 소급 반영 |
 
 새 마이그레이션은 `database/migarations/V<n>__설명.sql`로 추가하고([README](../README.md) 참고),
 이 문서의 해당 섹션과 위 히스토리 표를 함께 갱신한다.

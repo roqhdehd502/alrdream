@@ -21,6 +21,7 @@ import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
@@ -44,6 +45,8 @@ class AuthServiceTest {
 	private GoogleIdTokenVerifierAdapter googleIdTokenVerifier;
 	@Mock
 	private AppleIdTokenVerifierAdapter appleIdTokenVerifier;
+	@Mock
+	private SignupVerificationService signupVerificationService;
 
 	// 프로덕션(SecurityConfig)과 동일한 BCryptPasswordEncoder를 실 객체로 써서 matches()까지 실제로 검증한다.
 	private final PasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
@@ -56,7 +59,7 @@ class AuthServiceTest {
 	void setUp() {
 		authService = new AuthService(
 				memberRepository, passwordEncoder, jwtTokenProvider, refreshTokenStore,
-				googleIdTokenVerifier, appleIdTokenVerifier);
+				googleIdTokenVerifier, appleIdTokenVerifier, signupVerificationService);
 	}
 
 	private Member localMemberWithPassword() {
@@ -65,6 +68,34 @@ class AuthServiceTest {
 		Member member = Member.createLocal("user@example.com", passwordEncoder.encode(RAW_PASSWORD));
 		ReflectionTestUtils.setField(member, "id", UUID.randomUUID());
 		return member;
+	}
+
+	@Test
+	void signup_이메일_인증을_먼저_하지_않았으면_예외() {
+		when(memberRepository.existsByEmail("new@example.com")).thenReturn(false);
+		when(signupVerificationService.consumeVerifiedEmail("new@example.com")).thenReturn(false);
+
+		assertThatThrownBy(() -> authService.signup("new@example.com", RAW_PASSWORD))
+				.isInstanceOf(IllegalArgumentException.class)
+				.hasMessageContaining("인증");
+		verify(memberRepository, never()).save(any(Member.class));
+	}
+
+	@Test
+	void signup_이메일_인증을_마쳤으면_인증된_상태로_가입() {
+		when(memberRepository.existsByEmail("new@example.com")).thenReturn(false);
+		when(signupVerificationService.consumeVerifiedEmail("new@example.com")).thenReturn(true);
+		ArgumentCaptor<Member> memberCaptor = ArgumentCaptor.forClass(Member.class);
+		when(memberRepository.save(memberCaptor.capture())).thenAnswer(invocation -> {
+			Member saved = invocation.getArgument(0);
+			ReflectionTestUtils.setField(saved, "id", UUID.randomUUID()); // JPA가 저장 시점에 채워주는 것을 흉내
+			return saved;
+		});
+
+		AuthService.TokenIssueResult result = authService.signup("new@example.com", RAW_PASSWORD);
+
+		assertThat(result.accessToken()).isNotBlank();
+		assertThat(memberCaptor.getValue().isEmailVerified()).isTrue();
 	}
 
 	@Test

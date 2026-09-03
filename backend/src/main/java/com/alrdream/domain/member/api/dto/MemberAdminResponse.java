@@ -20,12 +20,13 @@ public record MemberAdminResponse(
 		@Schema(description = "현재 제재 여부(일시/영구 포함)") boolean banned,
 		@Schema(description = "영구 제재 여부") boolean permanentBan,
 		@Schema(description = "일시 제재 해제 시각, 없으면 null") OffsetDateTime tempBanUntil,
-		@Schema(description = "가입 시각") OffsetDateTime createdAt) {
+		@Schema(description = "가입 시각") OffsetDateTime createdAt,
+		@Schema(description = "이메일 인증 여부") boolean emailVerified) {
 
 	public static MemberAdminResponse from(Member member) {
 		return new MemberAdminResponse(
 				member.getId(), member.getEmail(), member.getName(), member.getProvider(), member.getRole(),
 				member.getPlan(), member.getProExpiresAt(), member.isBanned(), member.isPermanentBan(),
-				member.getTempBanUntil(), member.getCreatedAt());
+				member.getTempBanUntil(), member.getCreatedAt(), member.isEmailVerified());
 	}
 }

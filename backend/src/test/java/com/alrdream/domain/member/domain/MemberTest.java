@@ -31,6 +31,29 @@ class MemberTest {
 	}
 
 	@Test
+	void createLocal_이메일_미인증_상태로_시작() {
+		Member member = Member.createLocal("user@example.com", "hashed");
+
+		assertThat(member.isEmailVerified()).isFalse();
+	}
+
+	@Test
+	void createOAuth_가입_즉시_이메일_인증됨() {
+		Member member = Member.createOAuth("user@example.com", AuthProvider.GOOGLE, "google-sub-1");
+
+		assertThat(member.isEmailVerified()).isTrue();
+	}
+
+	@Test
+	void markEmailVerified_인증_상태로_전환() {
+		Member member = Member.createLocal("user@example.com", "hashed");
+
+		member.markEmailVerified();
+
+		assertThat(member.isEmailVerified()).isTrue();
+	}
+
+	@Test
 	void extendProUntil_FREE에서_처음_지급받으면_오늘부터_기산() {
 		Member member = Member.createLocal("user@example.com", "hashed");
 		OffsetDateTime before = OffsetDateTime.now();

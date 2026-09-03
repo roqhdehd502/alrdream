@@ -1987,7 +1987,7 @@ http://localhost:8080/api/auth/refresh`로 재사용해 200과 새 토큰 쌍을
   `application.yml`에서 `management.health.db`를 끄지 않았음 — Redis/Mail만 명시적으로 다룸) 이 호출
   자체가 "가벼운 DB 호출"이 된다. 별도 백엔드 엔드포인트를 새로 만들 필요가 없었다.
 - **`curl` 재시도 옵션**: Render Free 콜드스타트는 수십 초가 걸릴 수 있어 `--max-time 120 --retry 5
-  --retry-delay 15 --retry-all-errors`로 넉넉히 재시도하도록 했다(`--retry-all-errors`가 있어야 콜드스타트
+--retry-delay 15 --retry-all-errors`로 넉넉히 재시도하도록 했다(`--retry-all-errors`가 있어야 콜드스타트
   중 연결 자체가 실패하는 경우도 재시도 대상이 된다 — 기본 `--retry`는 일부 일시적 오류만 재시도).
 - **`workflow_dispatch` 추가**: 스케줄과 별개로 GitHub Actions 탭에서 수동 실행해 즉시 동작을 확인할 수
   있게 했다(실제 크론 발동을 하루 기다리지 않고 검증 가능).
@@ -2005,6 +2005,103 @@ http://localhost:8080/api/auth/refresh`로 재사용해 200과 새 토큰 쌍을
   자동 비활성화한다 — 이 프로젝트는 활발히 커밋되고 있어 당장 문제는 아니지만 장기적으로는 유의해야 한다.
   (2) GitHub의 스케줄 트리거는 "정확히 그 시각"이 아니라 부하에 따라 수 분~수십 분 지연될 수 있다 —
   Supabase의 7일 기준에 비해 오차가 무의미할 정도로 작아 문제 없다고 판단했다.
+
+---
+
+# Phase 23: 이메일 인증 기능
+
+## 작업 항목
+
+- [x] 회원 가입시 이메일 인증기능 구현
+- [x] 기존 회원의 경우 마이페이지 화면에서 별도의 이메일 인증 기능 추가
+
+## 설계 결정
+
+이 Phase는 한 번 구현한 뒤 사용자 피드백으로 흐름을 다시 설계했다 — 처음엔 "가입은 그대로 되고, 가입
+직후 인증 코드를 자동 발송해 마이페이지에서 아무 때나 인증"하는 **비차단형**으로 구현했으나, 사용자가
+원한 건 **"이메일 인증 → 회원가입 정보 입력 → 가입"** 순서로 이메일 인증을 가입의 앞 단계로 두는
+흐름이었다. 아래는 최종(2차) 설계다.
+
+- **가입 자체를 이메일 인증으로 게이트한다**: `AuthService.signup(email, rawPassword)`이
+  `SignupVerificationService.consumeVerifiedEmail(email)`을 먼저 확인해, 그 이메일이 방금 인증을
+  마치지 않았으면 가입 자체를 400으로 거부한다. UI에서 순서를 지키게 하는 것만으로는 API를 직접 호출하는
+  우회를 막을 수 없어 서버에서도 강제했다.
+- **계정이 없는 상태에서의 인증 — 비밀번호 재설정 패턴을 재사용**: 가입 전이라 로그인된 사용자(
+  `MemberPrincipal`)가 없으므로, 이메일 자체로 인증하는 `SignupVerificationService`/
+  `SignupVerificationController`(`/api/auth/signup/email-verification/request`·`/confirm`, 인증 불필요)를
+  새로 만들었다 — Phase 16 비밀번호 재설정과 동일하게 이메일만으로 요청하는 공개 엔드포인트다. 6자리
+  코드/TTL(10분)/쿨다운(60초)/최대 시도(5회) 구조와 `MailService` 재사용도 동일하다.
+- **"인증됨" 상태를 가입 시점까지 들고 있어야 한다**: 코드 확인이 성공한 시점과 실제 가입(비밀번호 입력
+  후 제출) 시점 사이에 시간차가 있으므로, `SignupVerificationCodeStore.markVerified(email)`로 30분
+  TTL의 "인증됨" 플래그를 Redis에 남기고, `signup()`이 `consumeVerified(email)`(Redis `DEL`, 원자적)로
+  1회성 소비한다 — 같은 인증으로 두 번 가입할 수 없고, 30분 안에 가입을 완료하지 않으면 인증부터 다시
+  해야 한다.
+- **이메일 열거 공격보다 UX가 우선**: 회원가입 폼은 애초에 "이미 가입된 이메일입니다"를 그대로 알려주는
+  구조라(기존 `AuthService.signup`의 동작) 열거 공격 방지가 설계 목표가 아니다. 그래서
+  `SignupVerificationService.requestCode()`도 이미 가입된 이메일이면 코드를 보내지 않고 바로 400을
+  반환한다(비밀번호 재설정처럼 항상 204로 숨기지 않음) — 이미 가입된 계정의 받은편지함에 의미 없는 코드가
+  가지 않게 하는 부수 효과도 있다.
+- **가입이 완료되면 이미 인증된 상태**: `AuthService.signup()`은 `Member.createLocal(...)` 직후
+  `member.markEmailVerified()`를 호출해 `users.email_verified = true`로 저장한다 — 인증을 통과해야만
+  도달하는 코드 경로라 별도 확인 없이 바로 true로 둬도 안전하다.
+- **OAuth 계정은 이 흐름과 무관하게 항상 인증됨**: Google/Apple은 이미 그 공급자가 이메일 소유를
+  검증했으므로 `Member.createOAuth()`가 `emailVerified=true`로 생성한다(변경 없음).
+- **기존 회원(마이페이지) 흐름은 그대로 유지**: 이 Phase 이전에 이미 LOCAL로 가입한 회원은 소급 인증되지
+  않고 미인증 상태로 남는다(V11 마이그레이션) — 이들을 위한 인증 수단으로, 로그인 후 본인 인증
+  (`MemberPrincipal`)이 되는 `EmailVerificationService`/`EmailVerificationController`(
+  `/api/auth/email-verification/request`·`/confirm`, `bearerAuth` 필요)를 별도로 유지한다. **새로 가입하는
+  회원은 가입 시점에 이미 인증되므로 이 화면을 쓸 일이 없고, 오직 이 마이그레이션 이전 기존 회원만을
+  위한 기능이다.** 처음 구현했던 "가입 직후 자동 발송" 로직(`AuthService`가
+  `EmailVerificationService.requestCode()`를 호출하던 부분)은 새 흐름에서 가입 자체가 인증을 전제하므로
+  불필요해져 제거했다.
+- **프론트 — 회원가입 화면을 3단계 위저드로 재구성**: `sign-up.tsx`를 이메일 → 코드 → 비밀번호 3단계
+  내부 상태 머신으로 바꿨다(라우트는 그대로 `/sign-up` 하나, `account.tsx` 회원탈퇴 섹션의 다단계 상태
+  관리와 같은 스타일). 1단계(이메일)에서만 Google 로그인 버튼을 함께 보여준다(OAuth는 이 인증 절차 자체가
+  필요 없으므로). 마이페이지의 "이메일 인증" 섹션(1차 구현 때 추가)은 위 기존 회원 흐름을 위해 그대로
+  남겨뒀다.
+- **UI 보강(3차) — 코드 만료 카운트다운 + HTML 인증 메일**: 실제 메일로 인증 흐름까지 확인한 사용자
+  피드백을 반영해 두 가지를 다듬었다.
+  - `SignupVerificationController.request`가 `204` 대신 `{ expiresInSeconds }`(200)를 반환하도록 바꿔,
+    프론트가 하드코딩된 숫자 대신 서버 값으로 카운트다운을 표시한다(`sign-up.tsx`가 `Date.now() +
+    expiresInSeconds * 1000`을 저장하고 1초마다 남은 시간을 "mm:ss 남음"으로 갱신, 만료되면 "확인" 버튼을
+    비활성화하고 재발송을 유도).
+  - 인증 코드 메일을 `SimpleMailMessage` 평문에서 HTML 메일로 바꿨다. `MailService.sendHtml(to, subject,
+    text, html)`을 새로 추가하고(`MimeMessageHelper`, text/html alternative), 코드가 큼직하게 강조된
+    카드형 템플릿(`VerificationCodeEmailTemplate`)을 만들어 회원가입 인증 메일에 적용했다(비밀번호
+    재설정 메일은 이번 요청 범위가 아니라 그대로 평문으로 남겨둠).
+  - **라이브 테스트로 잡은 버그**: `MimeMessageHelper`를 `multipart=false`로 생성한 채
+    `setText(text, html)`(대체 텍스트 포함 2-인자 오버로드)를 호출하면 `IllegalStateException("Not in
+    multipart mode")`가 나 500이 되는 걸 실제 요청으로 발견 — `multipart=true`로 생성하도록 수정했다.
+    이 문제는 백엔드 유닛 테스트에서는 잡히지 않았다(실제 메일 발송을 모킹하지 않고 SMTP까지 라이브로
+    태워봐야 드러나는 종류의 버그라, 이번에도 실제 `.env`/Redis/Gmail을 띄운 채 `curl`로 재현·수정·재검증
+    했다).
+- **UI 보강(4차) — 마이페이지 인증 흐름에도 동일하게 적용**: 3차 보강을 회원가입 화면에만 적용했더니
+  기존 회원(마이그레이션 이전 미인증 LOCAL 계정)이 마이페이지에서 인증할 때는 카운트다운도, HTML 메일도
+  적용되지 않는다는 지적을 받아 `EmailVerificationController`/`EmailVerificationService`에도 동일하게
+  반영했다. `EmailVerificationController.request`도 `204` 대신 `{ expiresInSeconds }`(200)를 반환하고,
+  `EmailVerificationService.requestCode()`도 `mailService.send()`(평문) 대신 `sendHtml()` +
+  `VerificationCodeEmailTemplate`을 쓴다 — 회원가입 흐름과 완전히 같은 코드 경로(같은 템플릿 유틸,
+  같은 응답 DTO 모양)라 새 버그 없이 그대로 재사용됐다. `account.tsx`도 `sign-up.tsx`와 같은 카운트다운
+  로직(1초 tick, mm:ss 표시, 만료 시 확인 버튼 비활성화)을 추가했다. 라이브 검증은 실제로 가입 후
+  DB에서 `email_verified`를 직접 `false`로 되돌려(마이그레이션 이전 기존 회원 상황 재현) 마이페이지
+  인증 전체 흐름(코드 요청 → 카운트다운 → 코드 확인 → "인증됨" 배지)을 Playwright로 확인했다.
+- **UI 보강(5차) — Admin 사용자 관리에 인증 여부 노출**: `MemberAdminResponse`에 `emailVerified`를
+  추가하고(`from()` 팩토리에서 `member.isEmailVerified()` 매핑), `UsersPage.tsx` 목록에 "이메일 인증"
+  컬럼(인증됨/미인증 배지), `UserDetailPage.tsx` 상세에 같은 배지의 "이메일 인증" stat 블록을 추가했다
+  — 둘 다 이미 있던 `plan`(PRO/FREE)·`banned` 컬럼과 완전히 같은 배지 패턴이라 새 스타일 없이 그대로
+  재사용했다. CS 조회/필터링 목적만 요청받았고 인증 상태를 관리자가 직접 바꾸는 액션은 요구되지 않아
+  표시 전용으로 두었다(강제 인증 처리 같은 액션은 스코프 밖).
+
+## 한계
+
+- **실제 메일 수신 확인은 로컬 개발 환경 한정**: Gmail SMTP 앱 비밀번호가 로컬 `.env`에 설정된 경우에만
+  실제 메일 발송을 확인할 수 있다. 로컬에서 실제 Supabase DB + 로컬 Redis + 실제 Gmail SMTP를 띄운 채
+  Playwright로 회원가입 3단계 전체(코드는 Redis에서 직접 조회)와 `curl`로 인증 없이 가입을 시도했을 때
+  400이 나는지까지 라이브로 확인했다(테스트 계정은 확인 후 탈퇴 처리로 정리).
+- **Admin UI는 라이브 검증을 하지 못함**: 시드된 `admin@alrdream.test` 계정의 비밀번호를 몰라(안전 정책상
+  DB에 직접 UPDATE로 새 관리자를 만드는 것도 피함 — Phase 22와 같은 이유) 실제 로그인 후 화면을 띄워보지
+  못했다. 백엔드 컴파일/테스트, admin `tsc`/`oxlint`/`vite build`는 모두 통과했고, 배지 렌더링은 이미
+  검증된 `plan`/`banned` 컬럼과 동일한 코드 패턴이라 리스크가 낮다고 판단했다.
 
 ---
 

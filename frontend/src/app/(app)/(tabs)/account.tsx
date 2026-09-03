@@ -6,6 +6,7 @@ import { authApi } from "../../../api/auth";
 import { usageQuotaApi } from "../../../api/usageQuota";
 import { ApiError } from "../../../api/client";
 import { Avatar } from "../../../components/ui/Avatar";
+import { Badge } from "../../../components/ui/Badge";
 import { Button } from "../../../components/ui/Button";
 import { Card } from "../../../components/ui/Card";
 import { ErrorBanner, Loading } from "../../../components/ui/Feedback";
@@ -14,8 +15,15 @@ import { IconChip } from "../../../components/ui/IconChip";
 import { ProgressRing } from "../../../components/ui/ProgressRing";
 import { ScreenContainer } from "../../../components/ui/ScreenContainer";
 import { useTheme, useThemedStyles } from "../../../components/ui/ThemeContext";
-import { SubscriptionIcon, TicketIcon } from "../../../components/ui/icons";
+import { fontFamily } from "../../../components/ui/theme";
+import { InboxIcon, SubscriptionIcon, TicketIcon } from "../../../components/ui/icons";
 import type { UsageQuotaResponse } from "../../../types";
+
+function formatRemaining(totalSeconds: number) {
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}:${seconds.toString().padStart(2, "0")}`;
+}
 
 export default function AccountScreen() {
   const router = useRouter();
@@ -40,6 +48,14 @@ export default function AccountScreen() {
       alignItems: "flex-end" as const,
     },
     nameField: { flexGrow: 1 },
+    codeRow: {
+      flexDirection: "row" as const,
+      gap: 10,
+      alignItems: "flex-end" as const,
+    },
+    codeField: { flexGrow: 1 },
+    expiry: { color: colors.textMuted, fontSize: 13, fontFamily: fontFamily.medium },
+    expiryUrgent: { color: colors.danger, fontFamily: fontFamily.semibold },
     quotaRow: {
       flexDirection: "row" as const,
       alignItems: "center" as const,
@@ -69,6 +85,14 @@ export default function AccountScreen() {
   const [savingName, setSavingName] = useState(false);
   const [nameMessage, setNameMessage] = useState<string | null>(null);
 
+  const [verifyCode, setVerifyCode] = useState("");
+  const [requestingCode, setRequestingCode] = useState(false);
+  const [confirmingCode, setConfirmingCode] = useState(false);
+  const [emailVerifyError, setEmailVerifyError] = useState<string | null>(null);
+  const [emailVerifyMessage, setEmailVerifyMessage] = useState<string | null>(null);
+  const [codeExpiresAt, setCodeExpiresAt] = useState<number | null>(null);
+  const [remainingSeconds, setRemainingSeconds] = useState(0);
+
   // member.name이 (새로고침 등으로) 바뀌면 편집 중이 아닌 입력값을 따라가게 한다 — useEffect 대신 렌더 중
   // 조정하는 방식(React 권장 패턴, "Adjusting state when a prop changes")으로 불필요한 추가 렌더를 피한다.
   if ((member?.name ?? null) !== syncedName) {
@@ -82,6 +106,15 @@ export default function AccountScreen() {
       .then(setQuota)
       .catch(() => setQuota(null));
   }, []);
+
+  // 인증 코드를 요청한 뒤에는 1초마다 만료까지 남은 시간을 갱신한다.
+  useEffect(() => {
+    if (codeExpiresAt === null) return;
+    const tick = () => setRemainingSeconds(Math.max(0, Math.round((codeExpiresAt - Date.now()) / 1000)));
+    tick();
+    const interval = setInterval(tick, 1000);
+    return () => clearInterval(interval);
+  }, [codeExpiresAt]);
 
   const cancelWithdrawFlow = () => {
     setWithdrawStep("idle");
@@ -145,6 +178,42 @@ export default function AccountScreen() {
     }
   };
 
+  const handleRequestEmailCode = async () => {
+    setEmailVerifyError(null);
+    setEmailVerifyMessage(null);
+    setRequestingCode(true);
+    try {
+      const { expiresInSeconds } = await authApi.requestEmailVerification();
+      setCodeExpiresAt(Date.now() + expiresInSeconds * 1000);
+      setEmailVerifyMessage("인증 코드를 보냈습니다. 이메일을 확인해주세요.");
+    } catch (e) {
+      setEmailVerifyError(
+        e instanceof ApiError ? e.message : "코드 발송에 실패했습니다.",
+      );
+    } finally {
+      setRequestingCode(false);
+    }
+  };
+
+  const handleConfirmEmailCode = async () => {
+    setEmailVerifyError(null);
+    setEmailVerifyMessage(null);
+    setConfirmingCode(true);
+    try {
+      await authApi.confirmEmailVerification(verifyCode.trim());
+      setVerifyCode("");
+      setCodeExpiresAt(null);
+      await refreshMember();
+      setEmailVerifyMessage("이메일 인증이 완료되었습니다.");
+    } catch (e) {
+      setEmailVerifyError(
+        e instanceof ApiError ? e.message : "인증에 실패했습니다.",
+      );
+    } finally {
+      setConfirmingCode(false);
+    }
+  };
+
   const quotaRatio =
     quota && quota.limitCount > 0
       ? Math.min(quota.generationCount / quota.limitCount, 1)
@@ -198,6 +267,62 @@ export default function AccountScreen() {
               style={styles.saveButton}
             />
           </Card>
+        </View>
+
+        <View style={styles.section}>
+          <View style={styles.navHeadingRow}>
+            <IconChip
+              icon={<InboxIcon size={16} color={colors.primary} />}
+              size={32}
+              tone="surface"
+            />
+            <Text style={typography.heading}>이메일 인증</Text>
+            {member?.emailVerified && <Badge label="인증됨" tone="success" />}
+          </View>
+          {member?.emailVerified ? (
+            <Text style={typography.muted}>이메일 인증이 완료되었습니다.</Text>
+          ) : (
+            <>
+              <Text style={typography.muted}>
+                {member?.email}로 받은 6자리 코드를 입력해주세요. 코드를 받지
+                못했다면 다시 받을 수 있습니다.
+              </Text>
+              <View style={styles.codeRow}>
+                <Field
+                  placeholder="6자리 코드"
+                  value={verifyCode}
+                  onChangeText={setVerifyCode}
+                  keyboardType="number-pad"
+                  maxLength={6}
+                  containerStyle={styles.codeField}
+                />
+                <Button
+                  label="확인"
+                  onPress={handleConfirmEmailCode}
+                  loading={confirmingCode}
+                  disabled={verifyCode.length !== 6 || (codeExpiresAt !== null && remainingSeconds <= 0)}
+                />
+              </View>
+              {codeExpiresAt !== null && (
+                <Text style={[styles.expiry, remainingSeconds <= 0 && styles.expiryUrgent]}>
+                  {remainingSeconds > 0
+                    ? `코드 만료까지 ${formatRemaining(remainingSeconds)} 남음`
+                    : "코드가 만료되었습니다. 다시 받아주세요."}
+                </Text>
+              )}
+              <Button
+                label="인증 코드 받기"
+                variant="secondary"
+                onPress={handleRequestEmailCode}
+                loading={requestingCode}
+                style={styles.saveButton}
+              />
+              <ErrorBanner message={emailVerifyError} />
+              {emailVerifyMessage && (
+                <Text style={typography.muted}>{emailVerifyMessage}</Text>
+              )}
+            </>
+          )}
         </View>
 
         <View style={styles.section}>
